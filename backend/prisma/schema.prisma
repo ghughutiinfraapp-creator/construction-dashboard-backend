@@ -1,0 +1,408 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── ENUMS ──────────────────────────────────────────────────────────
+enum Role {
+  SUPER_ADMIN
+  PROJECT_MANAGER
+  SITE_ENGINEER
+  FINANCE
+  DELIVERY_PERSON
+  CLIENT
+}
+
+enum ProjectStatus {
+  PLANNING
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+}
+
+enum TaskStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  BLOCKED
+  COMPLETED
+  VERIFIED
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  HALF_DAY
+}
+
+enum POStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  VENDOR_ASSIGNED
+  READY_FOR_PICKUP
+  DELIVERED
+  VERIFIED
+  CLOSED
+  REJECTED
+}
+
+enum POUrgency {
+  NORMAL
+  URGENT
+  CRITICAL
+}
+
+enum DeliveryStatus {
+  ASSIGNED
+  PICKED_UP
+  DELIVERED
+  VERIFIED
+  ISSUE_RAISED
+}
+
+enum NotificationType {
+  TASK_ASSIGNED
+  TASK_UPDATED
+  PO_SUBMITTED
+  PO_APPROVED
+  PO_REJECTED
+  DELIVERY_ASSIGNED
+  DELIVERY_COMPLETED
+  VERIFICATION_NEEDED
+  ATTENDANCE_REMINDER
+  GENERAL
+}
+
+// ─── USERS ──────────────────────────────────────────────────────────
+model User {
+  id            String   @id @default(uuid())
+  name          String
+  email         String   @unique
+  phone         String?  @unique
+  password      String
+  role          Role
+  avatar        String?
+  deviceId      String?  @map("device_id")
+  fcmToken      String?  @map("fcm_token")
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  managedProjects    Project[]          @relation("ProjectManager")
+  clientProjects     Project[]          @relation("ProjectClient")
+  assignedTasks      Task[]             @relation("TaskAssignee")
+  createdTasks       Task[]             @relation("TaskCreator")
+  attendance         Attendance[]
+  labourMarkedBy     LabourAttendance[] @relation("MarkedBy")
+  createdPOs         PurchaseOrder[]    @relation("POCreator")
+  approvedPOs        PurchaseOrder[]    @relation("POApprover")
+  deliveries         Delivery[]         @relation("DeliveryPerson")
+  verifiedDeliveries Delivery[]         @relation("DeliveryVerifier")
+  photos             Photo[]
+  notifications      Notification[]
+  refreshTokens      RefreshToken[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String   @map("user_id")
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+}
+
+// ─── PROJECTS ───────────────────────────────────────────────────────
+model Project {
+  id             String        @id @default(uuid())
+  name           String
+  description    String?
+  address        String?
+  status         ProjectStatus @default(PLANNING)
+  managerId      String        @map("manager_id")
+  clientId       String?       @map("client_id")
+  budget         Decimal?      @db.Decimal(12, 2)
+  startDate      DateTime?     @map("start_date")
+  endDate        DateTime?     @map("end_date")
+  geofenceLat    Float?        @map("geofence_lat")
+  geofenceLng    Float?        @map("geofence_lng")
+  geofenceRadius Int           @default(300) @map("geofence_radius")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+
+  // Relations
+  manager          User               @relation("ProjectManager", fields: [managerId], references: [id])
+  client           User?              @relation("ProjectClient", fields: [clientId], references: [id])
+  tasks            Task[]
+  attendance       Attendance[]
+  labourAttendance LabourAttendance[]
+  labourers        Labourer[]
+  purchaseOrders   PurchaseOrder[]
+  photos           Photo[]
+
+  @@map("projects")
+}
+
+// ─── TASKS ──────────────────────────────────────────────────────────
+model Task {
+  id           String       @id @default(uuid())
+  projectId    String       @map("project_id")
+  title        String
+  description  String?
+  status       TaskStatus   @default(NOT_STARTED)
+  priority     TaskPriority @default(MEDIUM)
+  assignedToId String?      @map("assigned_to_id")
+  createdById  String       @map("created_by_id")
+  startDate    DateTime?    @map("start_date")
+  dueDate      DateTime?    @map("due_date")
+  completedAt  DateTime?    @map("completed_at")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+
+  // Relations
+  project    Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignedTo User?   @relation("TaskAssignee", fields: [assignedToId], references: [id])
+  createdBy  User    @relation("TaskCreator", fields: [createdById], references: [id])
+  photos     Photo[]
+
+  @@map("tasks")
+}
+
+// ─── ATTENDANCE (Engineers - Geo-fenced) ────────────────────────────
+model Attendance {
+  id               String    @id @default(uuid())
+  userId           String    @map("user_id")
+  projectId        String    @map("project_id")
+  punchInTime      DateTime  @map("punch_in_time")
+  punchOutTime     DateTime? @map("punch_out_time")
+  punchInLat       Float     @map("punch_in_lat")
+  punchInLng       Float     @map("punch_in_lng")
+  punchOutLat      Float?    @map("punch_out_lat")
+  punchOutLng      Float?    @map("punch_out_lng")
+  selfieUrl        String?   @map("selfie_url")
+  isWithinGeofence Boolean   @default(true) @map("is_within_geofence")
+  totalHours       Float?    @map("total_hours")
+  date             DateTime  @db.Date
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  user    User    @relation(fields: [userId], references: [id])
+  project Project @relation(fields: [projectId], references: [id])
+
+  @@unique([userId, date])
+  @@map("attendance")
+}
+
+// ─── LABOURERS ──────────────────────────────────────────────────────
+model Labourer {
+  id        String   @id @default(uuid())
+  name      String
+  phone     String?
+  aadhaar   String?
+  tradeType String   @map("trade_type")
+  dailyWage Decimal  @db.Decimal(8, 2) @map("daily_wage")
+  projectId String   @map("project_id")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  project    Project            @relation(fields: [projectId], references: [id])
+  attendance LabourAttendance[]
+
+  @@map("labourers")
+}
+
+model LabourAttendance {
+  id         String           @id @default(uuid())
+  labourerId String           @map("labourer_id")
+  projectId  String           @map("project_id")
+  markedById String           @map("marked_by_id")
+  date       DateTime         @db.Date
+  status     AttendanceStatus @default(PRESENT)
+  photoUrl   String?          @map("photo_url")
+  createdAt  DateTime         @default(now()) @map("created_at")
+
+  // Relations
+  labourer Labourer @relation(fields: [labourerId], references: [id])
+  project  Project  @relation(fields: [projectId], references: [id])
+  markedBy User     @relation("MarkedBy", fields: [markedById], references: [id])
+
+  @@unique([labourerId, date])
+  @@map("labour_attendance")
+}
+
+// ─── VENDORS ────────────────────────────────────────────────────────
+model Vendor {
+  id           String   @id @default(uuid())
+  name         String
+  phone        String?
+  email        String?
+  address      String?
+  gstNumber    String?  @map("gst_number")
+  categories   String[]
+  rating       Float?   @default(0)
+  paymentTerms String?  @map("payment_terms")
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  purchaseOrders PurchaseOrder[]
+
+  @@map("vendors")
+}
+
+// ─── PURCHASE ORDERS ────────────────────────────────────────────────
+model PurchaseOrder {
+  id              String    @id @default(uuid())
+  poNumber        String    @unique @map("po_number")
+  projectId       String    @map("project_id")
+  createdById     String    @map("created_by_id")
+  status          POStatus  @default(DRAFT)
+  urgency         POUrgency @default(NORMAL)
+  vendorId        String?   @map("vendor_id")
+  totalAmount     Decimal?  @db.Decimal(12, 2) @map("total_amount")
+  approvedById    String?   @map("approved_by_id")
+  approvedAt      DateTime? @map("approved_at")
+  notes           String?
+  rejectionReason String?   @map("rejection_reason")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  project    Project   @relation(fields: [projectId], references: [id])
+  createdBy  User      @relation("POCreator", fields: [createdById], references: [id])
+  vendor     Vendor?   @relation(fields: [vendorId], references: [id])
+  approvedBy User?     @relation("POApprover", fields: [approvedById], references: [id])
+  items      POItem[]
+  delivery   Delivery?
+  photos     Photo[]
+
+  @@map("purchase_orders")
+}
+
+model POItem {
+  id              String   @id @default(uuid())
+  purchaseOrderId String   @map("purchase_order_id")
+  itemName        String   @map("item_name")
+  itemCategory    String   @map("item_category")
+  quantity        Float
+  unit            String
+  unitPrice       Decimal? @db.Decimal(10, 2) @map("unit_price")
+  totalPrice      Decimal? @db.Decimal(10, 2) @map("total_price")
+  brand           String?
+  notes           String?
+
+  // Relations
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+
+  @@map("po_items")
+}
+
+// ─── MATERIAL CATALOG ───────────────────────────────────────────────
+model MaterialCatalog {
+  id           String   @id @default(uuid())
+  name         String
+  category     String
+  unit         String
+  defaultPrice Decimal? @db.Decimal(10, 2) @map("default_price")
+  brands       String[]
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("material_catalog")
+}
+
+// ─── DELIVERIES ─────────────────────────────────────────────────────
+model Delivery {
+  id               String         @id @default(uuid())
+  purchaseOrderId  String         @unique @map("purchase_order_id")
+  deliveryPersonId String         @map("delivery_person_id")
+  status           DeliveryStatus @default(ASSIGNED)
+  pickupAddress    String?        @map("pickup_address")
+  dropAddress      String?        @map("drop_address")
+  deliveryPhotoUrl String?        @map("delivery_photo_url")
+  deliveredAt      DateTime?      @map("delivered_at")
+  verifiedById     String?        @map("verified_by_id")
+  verifiedAt       DateTime?      @map("verified_at")
+  issueDescription String?        @map("issue_description")
+  issuePhotoUrl    String?        @map("issue_photo_url")
+  createdAt        DateTime       @default(now()) @map("created_at")
+  updatedAt        DateTime       @updatedAt @map("updated_at")
+
+  // Relations
+  purchaseOrder  PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
+  deliveryPerson User          @relation("DeliveryPerson", fields: [deliveryPersonId], references: [id])
+  verifiedBy     User?         @relation("DeliveryVerifier", fields: [verifiedById], references: [id])
+  photos         Photo[]
+
+  @@map("deliveries")
+}
+
+// ─── PHOTOS ─────────────────────────────────────────────────────────
+// entityType: 'task' | 'purchase_order' | 'delivery' | 'attendance' | 'progress'
+// entityId: string reference kept for display/filtering alongside proper FK columns
+model Photo {
+  id              String   @id @default(uuid())
+  uploadedById    String   @map("uploaded_by_id")
+  projectId       String?  @map("project_id")
+  entityType      String   @map("entity_type")
+  entityId        String   @map("entity_id")
+  taskId          String?  @map("task_id")
+  purchaseOrderId String?  @map("purchase_order_id")
+  deliveryId      String?  @map("delivery_id")
+  url             String
+  thumbnailUrl    String?  @map("thumbnail_url")
+  caption         String?
+  lat             Float?
+  lng             Float?
+  capturedAt      DateTime @default(now()) @map("captured_at")
+  watermarked     Boolean  @default(false)
+
+  // Relations
+  uploadedBy    User           @relation(fields: [uploadedById], references: [id])
+  project       Project?       @relation(fields: [projectId], references: [id])
+  task          Task?          @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  purchaseOrder PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id], onDelete: SetNull)
+  delivery      Delivery?      @relation(fields: [deliveryId], references: [id], onDelete: SetNull)
+
+  @@map("photos")
+}
+
+// ─── NOTIFICATIONS ──────────────────────────────────────────────────
+model Notification {
+  id         String           @id @default(uuid())
+  userId     String           @map("user_id")
+  title      String
+  body       String
+  type       NotificationType
+  entityType String?          @map("entity_type")
+  entityId   String?          @map("entity_id")
+  isRead     Boolean          @default(false) @map("is_read")
+  sentAt     DateTime         @default(now()) @map("sent_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
