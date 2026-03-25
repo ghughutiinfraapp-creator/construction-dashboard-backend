@@ -31,7 +31,7 @@ const io = new Server(server, {
       'http://localhost:3000',
       'http://localhost:8081',
       'http://10.0.2.2:8081',
-      'https://github.com/kuldeeppriu/construction-dashboard-backend.git'
+      'https://atharv-construction-dashboard-front.vercel.app'
     ],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH']
   }
