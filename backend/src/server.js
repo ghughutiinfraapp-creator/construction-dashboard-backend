@@ -30,7 +30,8 @@ const io = new Server(server, {
       process.env.MOBILE_URL,
       'http://localhost:3000',
       'http://localhost:8081',
-      'http://10.0.2.2:8081'
+      'http://10.0.2.2:8081',
+      'https://github.com/kuldeeppriu/construction-dashboard-backend.git'
     ],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH']
   }
