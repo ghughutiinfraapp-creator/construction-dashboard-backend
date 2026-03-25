@@ -47,7 +47,8 @@ app.use(cors({
     process.env.MOBILE_URL,
     'http://localhost:3000',
     'http://localhost:8081',
-    'http://10.0.2.2:8081'
+    'http://10.0.2.2:8081',
+    'https://atharv-construction-dashboard-front.vercel.app'
   ],
   credentials: true
 }));
