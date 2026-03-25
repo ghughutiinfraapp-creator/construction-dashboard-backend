@@ -31,7 +31,8 @@ const io = new Server(server, {
       'http://localhost:3000',
       'http://localhost:8081',
       'http://10.0.2.2:8081',
-      'https://atharv-construction-dashboard-front.vercel.app'
+      'https://construction-dashboard-frontend.vercel.app'
+      
     ],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH']
   }
@@ -48,7 +49,7 @@ app.use(cors({
     'http://localhost:3000',
     'http://localhost:8081',
     'http://10.0.2.2:8081',
-    'https://atharv-construction-dashboard-front.vercel.app'
+    'https://construction-dashboard-frontend.vercel.app'
   ],
   credentials: true
 }));
