@@ -18,6 +18,50 @@ router.post('/register', authenticate, authorize('SUPER_ADMIN', 'PROJECT_MANAGER
   } catch (error) { next(error); }
 });
 
+// New route
+
+
+router.post('/mobile/register', async (req, res, next) => {
+  try {
+    const { name, email, phone, password, role } = req.body;
+
+    const allowedRoles = ['SITE_ENGINEER', 'DELIVERY_PERSON', 'CLIENT'];
+
+    if (!allowedRoles.includes(role)) {
+      return res.status(400).json({ error: 'Invalid role selected' });
+    }
+
+    // check if user exists
+    const existingUser = await prisma.user.findUnique({
+      where: { email },
+    });
+
+    if (existingUser) {
+      return res.status(400).json({ error: 'User already exists' });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 12);
+
+    const user = await prisma.user.create({
+      data: {
+        name,
+        email,
+        phone,
+        password: hashedPassword,
+        role,
+      },
+    });
+
+    res.status(201).json({
+      message: 'User registered successfully',
+      user,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+
 // POST /api/auth/login
 router.post('/login', async (req, res, next) => {
   try {
