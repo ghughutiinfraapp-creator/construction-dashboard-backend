@@ -11,11 +11,11 @@ router.get('/', authenticate, async (req, res, next) => {
     // Role-based filtering
     if (req.user.role === 'CLIENT') where.clientId = req.user.id;
     else if (req.user.role === 'SITE_ENGINEER') where.tasks = { some: { assignedToId: req.user.id } };
-
+    else if (req.user.role === 'PROJECT_MANAGER') where.managerId = req.user.id; 
     if (status) where.status = status;
     if (search) where.name = { contains: search, mode: 'insensitive' };
 
-    const [projects, total] = await Promise.all([
+    const [projects, total] = await Promise.all([ 
       prisma.project.findMany({
         where, skip: (page - 1) * limit, take: parseInt(limit),
         include: {
@@ -83,6 +83,9 @@ router.put('/:id', authenticate, authorize('SUPER_ADMIN', 'PROJECT_MANAGER'), as
     res.json({ project });
   } catch (error) { next(error); }
 });
+
+
+
 
 // PUT /api/projects/:id/geofence
 router.put('/:id/geofence', authenticate, authorize('SUPER_ADMIN', 'PROJECT_MANAGER'), async (req, res, next) => {
