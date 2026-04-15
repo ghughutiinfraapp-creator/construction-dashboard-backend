@@ -18,6 +18,7 @@ const notificationRoutes = require('./routes/notifications');
 const dashboardRoutes = require('./routes/dashboard');
 const uploadRoutes = require('./routes/uploads');
 const materialRoutes = require('./routes/materials');
+const foremanRoutes= require('./routes/foreman');
 
 const { errorHandler } = require('./middleware/errorHandler');
 
@@ -71,6 +72,8 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/uploads', uploadRoutes);
 app.use('/api/materials', materialRoutes);
+app.use('/api/foreman',foremanRoutes);
+
 
 // Health check
 app.get('/api/health', (req, res) => {
