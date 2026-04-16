@@ -45,6 +45,9 @@ async function main() {
   const client = await prisma.user.create({
     data: { name: 'Mohit Agarwal', email: 'client@construction.com', phone: '9999900007', password, role: 'CLIENT' }
   });
+  await prisma.user.create({
+    data: { name: 'Vikram Thakur', email: 'foreman@construction.com', phone: '9999900008', password, role: 'FOREMAN' }
+  });
 
   console.log('✅ Users created (all passwords: password123)');
 
@@ -210,6 +213,7 @@ async function main() {
   console.log('Finance:   finance@construction.com / password123');
   console.log('Delivery:  delivery@construction.com / password123');
   console.log('Client:    client@construction.com / password123');
+  console.log('Foreman:   foreman@construction.com / password123');
 }
 
 main()
