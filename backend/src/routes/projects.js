@@ -11,7 +11,8 @@ router.get('/', authenticate, async (req, res, next) => {
     // Role-based filtering
     if (req.user.role === 'CLIENT') where.clientId = req.user.id;
     else if (req.user.role === 'SITE_ENGINEER') where.tasks = { some: { assignedToId: req.user.id } };
-    else if (req.user.role === 'PROJECT_MANAGER') where.managerId = req.user.id; 
+    else if (req.user.role === 'PROJECT_MANAGER') where.managerId = req.user.id;
+    else if (req.user.role === 'FOREMAN') where.foremanId = req.user.id;
     if (status) where.status = status;
     if (search) where.name = { contains: search, mode: 'insensitive' };
 
@@ -21,6 +22,7 @@ router.get('/', authenticate, async (req, res, next) => {
         include: {
           manager: { select: { id: true, name: true, avatar: true } },
           client: { select: { id: true, name: true } },
+          foreman: { select: { id: true, name: true, avatar: true } },
           _count: { select: { tasks: true, purchaseOrders: true, attendance: true } }
         },
         orderBy: { updatedAt: 'desc' }
@@ -60,6 +62,7 @@ router.get('/:id', authenticate, async (req, res, next) => {
       include: {
         manager: { select: { id: true, name: true, email: true, avatar: true } },
         client: { select: { id: true, name: true, email: true } },
+        foreman: { select: { id: true, name: true, email: true, avatar: true } },
         _count: { select: { tasks: true, purchaseOrders: true, labourers: true, attendance: true } }
       }
     });
@@ -86,6 +89,28 @@ router.put('/:id', authenticate, authorize('SUPER_ADMIN', 'PROJECT_MANAGER'), as
 
 
 
+
+// PUT /api/projects/:id/assign-foreman
+router.put('/:id/assign-foreman', authenticate, authorize('PROJECT_MANAGER', 'SUPER_ADMIN'), async (req, res, next) => {
+  try {
+    const { foremanId } = req.body;
+
+    if (foremanId) {
+      const foreman = await prisma.user.findUnique({ where: { id: foremanId }, select: { id: true, role: true } });
+      if (!foreman || foreman.role !== 'FOREMAN') return res.status(400).json({ error: 'User is not a foreman' });
+    }
+
+    const project = await prisma.project.update({
+      where: { id: req.params.id },
+      data: { foremanId: foremanId || null },
+      include: {
+        manager: { select: { id: true, name: true } },
+        foreman: { select: { id: true, name: true } }
+      }
+    });
+    res.json({ project, message: foremanId ? 'Foreman assigned successfully' : 'Foreman removed successfully' });
+  } catch (error) { next(error); }
+});
 
 // PUT /api/projects/:id/geofence
 router.put('/:id/geofence', authenticate, authorize('SUPER_ADMIN', 'PROJECT_MANAGER'), async (req, res, next) => {
