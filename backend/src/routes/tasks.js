@@ -76,7 +76,7 @@ router.post('/', authenticate, authorize('SUPER_ADMIN', 'PROJECT_MANAGER'), asyn
 });
 
 // POST /api/tasks/:id/subtasks — create a subtask under a parent task
-router.post('/:id/subtasks', authenticate, async (req, res, next) => { //hello
+router.post('/:id/subtasks', authenticate, authorize('SUPER_ADMIN', 'PROJECT_MANAGER'), async (req, res, next) => {
   try {
     const parent = await prisma.task.findUnique({
       where: { id: req.params.id },
