@@ -9,11 +9,11 @@ router.post('/punch-in', authenticate, authorize('SITE_ENGINEER'), async (req, r
     const { projectId, lat, lng, selfieUrl } = req.body;
     const today = new Date(); today.setHours(0, 0, 0, 0);
 
-    // Check if already punched in today
-    const existing = await prisma.attendance.findUnique({
-      where: { userId_date: { userId: req.user.id, date: today } }
+    // Block if there is already an open (not punched out) session
+    const activeSession = await prisma.attendance.findFirst({
+      where: { userId: req.user.id, date: today, punchOutTime: null }
     });
-    if (existing) return res.status(400).json({ error: 'Already punched in today' });
+    if (activeSession) return res.status(400).json({ error: 'Please punch out from current site before punching in to another' });
 
     // Get project geo-fence
     const project = await prisma.project.findUnique({ where: { id: projectId } });
@@ -52,11 +52,10 @@ router.post('/punch-out', authenticate, authorize('SITE_ENGINEER'), async (req, 
     const { lat, lng } = req.body;
     const today = new Date(); today.setHours(0, 0, 0, 0);
 
-    const attendance = await prisma.attendance.findUnique({
-      where: { userId_date: { userId: req.user.id, date: today } }
+    const attendance = await prisma.attendance.findFirst({
+      where: { userId: req.user.id, date: today, punchOutTime: null }
     });
-    if (!attendance) return res.status(400).json({ error: 'No punch-in record found for today' });
-    if (attendance.punchOutTime) return res.status(400).json({ error: 'Already punched out today' });
+    if (!attendance) return res.status(400).json({ error: 'No active punch-in found for today' });
 
     const punchOutTime = new Date();
     const totalHours = (punchOutTime - attendance.punchInTime) / (1000 * 60 * 60);
@@ -116,13 +115,16 @@ router.get('/history', authenticate, async (req, res, next) => {
 router.get('/status', authenticate, authorize('SITE_ENGINEER'), async (req, res, next) => {
   try {
     const today = new Date(); today.setHours(0, 0, 0, 0);
-    const record = await prisma.attendance.findUnique({
-      where: { userId_date: { userId: req.user.id, date: today } }
+    const records = await prisma.attendance.findMany({
+      where: { userId: req.user.id, date: today },
+      include: { project: { select: { id: true, name: true } } },
+      orderBy: { punchInTime: 'asc' }
     });
+    const activeRecord = records.find(r => !r.punchOutTime) ?? null;
     res.json({
-      isPunchedIn: !!record && !record.punchOutTime,
-      isPunchedOut: !!record?.punchOutTime,
-      record
+      isPunchedIn: !!activeRecord,
+      activeRecord,
+      sessions: records
     });
   } catch (error) { next(error); }
 });

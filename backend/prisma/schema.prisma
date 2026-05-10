@@ -220,7 +220,6 @@ model Attendance {
   user    User    @relation(fields: [userId], references: [id])
   project Project @relation(fields: [projectId], references: [id])
 
-  @@unique([userId, date])
   @@map("attendance")
 }
 
