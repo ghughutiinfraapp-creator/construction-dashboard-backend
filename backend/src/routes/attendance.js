@@ -2,6 +2,7 @@ const router = require('express').Router();
 const prisma = require('../config/database');
 const { authenticate, authorize } = require('../middleware/auth');
 const { isWithinGeofence } = require('../utils/geofence');
+const NotificationService = require('../services/notificationService');
 
 // POST /api/attendance/punch-in
 router.post('/punch-in', authenticate, authorize('SITE_ENGINEER'), async (req, res, next) => {
@@ -16,7 +17,10 @@ router.post('/punch-in', authenticate, authorize('SITE_ENGINEER'), async (req, r
     if (activeSession) return res.status(400).json({ error: 'Please punch out from current site before punching in to another' });
 
     // Get project geo-fence
-    const project = await prisma.project.findUnique({ where: { id: projectId } });
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: { id: true, name: true, managerId: true, clientId: true, geofenceLat: true, geofenceLng: true, geofenceRadius: true }
+    });
     if (!project) return res.status(404).json({ error: 'Project not found' });
     if (!project.geofenceLat || !project.geofenceLng) return res.status(400).json({ error: 'Geo-fence not set for this project' });
 
@@ -41,6 +45,29 @@ router.post('/punch-in', authenticate, authorize('SITE_ENGINEER'), async (req, r
     // Emit real-time update
     const io = req.app.get('io');
     if (io) io.to(`project-${projectId}`).emit('attendance-update', { type: 'punch-in', userId: req.user.id, attendance });
+
+    // Notify client and project manager with role-specific messages
+    const notifier = new NotificationService(io);
+    if (project.managerId) {
+      await notifier.send({
+        userId: project.managerId,
+        title: 'Engineer Punched In',
+        body: `${req.user.name} has punched in at ${project.name}`,
+        type: 'GENERAL',
+        entityType: 'attendance',
+        entityId: attendance.id
+      });
+    }
+    if (project.clientId) {
+      await notifier.send({
+        userId: project.clientId,
+        title: 'Site Engineer Available',
+        body: 'Site engineer is available on the site. Please connect if required.',
+        type: 'GENERAL',
+        entityType: 'attendance',
+        entityId: attendance.id
+      });
+    }
 
     res.status(201).json({ message: 'Punched in successfully', attendance });
   } catch (error) { next(error); }
