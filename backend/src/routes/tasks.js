@@ -26,8 +26,12 @@ router.get('/', authenticate, async (req, res, next) => {
           project:    { select: { id: true, name: true } },
           assignedTo: { select: { id: true, name: true, avatar: true } },
           createdBy:  { select: { id: true, name: true } },
+          category:   { select: { id: true, name: true } },
           subtasks: {
-            include: { assignedTo: { select: { id: true, name: true, avatar: true } } },
+            include: {
+              assignedTo: { select: { id: true, name: true, avatar: true } },
+              category:   { select: { id: true, name: true } },
+            },
             orderBy: { createdAt: 'asc' },
           },
           _count: { select: { photos: true } },
@@ -44,85 +48,133 @@ router.get('/', authenticate, async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
+// Resolves a subtask title from its categoryId if no title was provided
+async function resolveTitle(title, categoryId) {
+  if (title?.trim()) return title.trim();
+  if (!categoryId) return null;
+  const cat = await prisma.taskCategory.findUnique({ where: { id: categoryId }, select: { name: true } });
+  return cat?.name ?? null;
+}
+
 // POST /api/tasks
+// Creates a top-level task or a subtask depending on whether parentId is supplied.
+// Pass a `subtasks` array to create the parent and all its subtasks in one call.
 router.post('/', authenticate, authorize('SUPER_ADMIN', 'PROJECT_MANAGER'), async (req, res, next) => {
   try {
-    const { projectId, title, description, assignedToId, priority, startDate, dueDate } = req.body;
+    const { description, assignedToId, priority, startDate, dueDate, categoryId, parentId, subtasks = [] } = req.body;
+    let { title, projectId } = req.body;
+
+    // Resolve parent when creating a subtask
+    let projectName = null;
+    if (parentId) {
+      const parent = await prisma.task.findUnique({
+        where: { id: parentId },
+        select: { projectId: true, project: { select: { name: true } } },
+      });
+      if (!parent) return res.status(404).json({ error: 'Parent task not found' });
+      projectId   = parent.projectId;
+      projectName = parent.project.name;
+    }
+
+    if (!projectId) return res.status(400).json({ error: 'projectId is required' });
+
+    // Auto-fill title from category name when no custom title provided
+    title = await resolveTitle(title, categoryId);
+    if (!title) return res.status(400).json({ error: 'title is required' });
+
+    // Create parent task
     const task = await prisma.task.create({
       data: {
-        projectId, title, description, assignedToId,
-        priority:   priority   || 'MEDIUM',
-        createdById: req.user.id,
-        startDate:  startDate  ? new Date(startDate) : null,
-        dueDate:    dueDate    ? new Date(dueDate)   : null,
+        projectId,
+        parentId:     parentId     || null,
+        title,
+        description:  description  || null,
+        assignedToId: assignedToId || null,
+        priority:     priority     || 'MEDIUM',
+        createdById:  req.user.id,
+        startDate:    startDate    ? new Date(startDate) : null,
+        dueDate:      dueDate      ? new Date(dueDate)   : null,
+        categoryId:   categoryId   || null,
       },
       include: {
-        assignedTo: { select: { id: true, name: true } },
+        assignedTo: { select: { id: true, name: true, avatar: true } },
         project:    { select: { id: true, name: true } },
+        category:   { select: { id: true, name: true } },
       },
     });
 
+    projectName = projectName ?? task.project.name;
+
+    // Notify assignee on the parent task
     if (assignedToId) {
       try {
         const notifier = new NotificationService(req.app.get('io'));
         await notifier.send({
-          userId: assignedToId, title: 'New Task Assigned',
-          body: `You have been assigned: "${title}" in ${task.project.name}`,
+          userId: assignedToId,
+          title:  parentId ? 'New Subtask Assigned' : 'New Task Assigned',
+          body:   `You have been assigned: "${task.title}" in ${projectName}`,
           type: 'TASK_ASSIGNED', entityType: 'task', entityId: task.id,
         });
       } catch (_) {}
     }
 
-    res.status(201).json({ task: { ...task, subtasks: [] } });
+    // Create subtasks if provided in the same request
+    let createdSubtasks = [];
+    if (subtasks.length > 0) {
+      const resolved = await Promise.all(
+        subtasks.map(async (sub) => ({
+          ...sub,
+          title: await resolveTitle(sub.title, sub.categoryId),
+        }))
+      );
+
+      const invalid = resolved.find(s => !s.title);
+      if (invalid) return res.status(400).json({ error: 'Each subtask must have a title or a valid categoryId' });
+
+      createdSubtasks = await Promise.all(
+        resolved.map(sub =>
+          prisma.task.create({
+            data: {
+              projectId,
+              parentId:     task.id,
+              title:        sub.title,
+              description:  sub.description  || null,
+              assignedToId: sub.assignedToId || null,
+              priority:     sub.priority     || 'MEDIUM',
+              createdById:  req.user.id,
+              startDate:    sub.startDate    ? new Date(sub.startDate) : null,
+              dueDate:      sub.dueDate      ? new Date(sub.dueDate)   : null,
+              categoryId:   sub.categoryId   || null,
+            },
+            include: {
+              assignedTo: { select: { id: true, name: true, avatar: true } },
+              category:   { select: { id: true, name: true } },
+            },
+          })
+        )
+      );
+
+      // Notify subtask assignees
+      const notifier = new NotificationService(req.app.get('io'));
+      for (const sub of createdSubtasks) {
+        if (sub.assignedToId) {
+          try {
+            await notifier.send({
+              userId: sub.assignedToId,
+              title:  'New Subtask Assigned',
+              body:   `You have been assigned: "${sub.title}" in ${projectName}`,
+              type: 'TASK_ASSIGNED', entityType: 'task', entityId: sub.id,
+            });
+          } catch (_) {}
+        }
+      }
+    }
+
+    res.status(201).json({ task: { ...task, subtasks: createdSubtasks } });
   } catch (error) { next(error); }
 });
 
 // ── SUBTASK ROUTES — must come BEFORE generic /:id routes ─────────────────
-
-// POST /api/tasks/:id/subtasks
-router.post('/:id/subtasks', authenticate, authorize('SUPER_ADMIN', 'PROJECT_MANAGER'), async (req, res, next) => {
-  try {
-    const parent = await prisma.task.findUnique({
-      where: { id: req.params.id },
-      select: { id: true, projectId: true, project: { select: { name: true } } },
-    });
-    if (!parent) return res.status(404).json({ error: 'Parent task not found' });
-
-    const { title, description, assignedToId, priority, startDate, dueDate } = req.body;
-    if (!title?.trim()) return res.status(400).json({ error: 'Title is required' });
-
-    const subtask = await prisma.task.create({
-      data: {
-        projectId:   parent.projectId,
-        parentId:    parent.id,
-        title:       title.trim(),
-        description: description?.trim() || null,
-        assignedToId: assignedToId || null,
-        priority:    priority || 'MEDIUM',
-        createdById: req.user.id,
-        startDate:   startDate ? new Date(startDate) : null,
-        dueDate:     dueDate   ? new Date(dueDate)   : null,
-      },
-      include: { assignedTo: { select: { id: true, name: true, avatar: true } } },
-    });
-
-    if (assignedToId) {
-      try {
-        const notifier = new NotificationService(req.app.get('io'));
-        await notifier.send({
-          userId: assignedToId, title: 'New Subtask Assigned',
-          body: `You have been assigned a subtask: "${title}" in ${parent.project.name}`,
-          type: 'TASK_ASSIGNED', entityType: 'task', entityId: subtask.id,
-        });
-      } catch (_) {}
-    }
-
-    res.status(201).json({ subtask });
-  } catch (error) {
-    console.error('Create subtask error:', error);
-    next(error);
-  }
-});
 
 // GET /api/tasks/:id/subtasks
 router.get('/:id/subtasks', authenticate, async (req, res, next) => {
@@ -132,6 +184,7 @@ router.get('/:id/subtasks', authenticate, async (req, res, next) => {
       include: {
         assignedTo: { select: { id: true, name: true, avatar: true } },
         createdBy:  { select: { id: true, name: true } },
+        category:   { select: { id: true, name: true } },
         _count: { select: { photos: true } },
       },
       orderBy: { createdAt: 'asc' },
@@ -201,7 +254,25 @@ router.put('/:id/status', authenticate, async (req, res, next) => {
 // PUT /api/tasks/:id  (generic update — must come AFTER specific sub-routes)
 router.put('/:id', authenticate, authorize('SUPER_ADMIN', 'PROJECT_MANAGER'), async (req, res, next) => {
   try {
-    const task = await prisma.task.update({ where: { id: req.params.id }, data: req.body });
+    const { title, description, assignedToId, priority, startDate, dueDate, categoryId } = req.body;
+    const data = {};
+    if (title        !== undefined) data.title        = title;
+    if (description  !== undefined) data.description  = description;
+    if (assignedToId !== undefined) data.assignedToId = assignedToId;
+    if (priority     !== undefined) data.priority     = priority;
+    if (startDate    !== undefined) data.startDate    = startDate ? new Date(startDate) : null;
+    if (dueDate      !== undefined) data.dueDate      = dueDate   ? new Date(dueDate)   : null;
+    if (categoryId   !== undefined) data.categoryId   = categoryId || null;
+
+    const task = await prisma.task.update({
+      where: { id: req.params.id },
+      data,
+      include: {
+        project:    { select: { id: true, name: true } },
+        assignedTo: { select: { id: true, name: true, avatar: true } },
+        category:   { select: { id: true, name: true } },
+      },
+    });
     res.json({ task });
   } catch (error) { next(error); }
 });

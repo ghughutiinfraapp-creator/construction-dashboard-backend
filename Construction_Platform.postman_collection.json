@@ -1,0 +1,989 @@
+{
+  "info": {
+    "name": "Construction Platform API",
+    "_postman_id": "construction-platform-v2",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url",     "value": "http://localhost:5000/api", "type": "string" },
+    { "key": "token",        "value": "",                          "type": "string" },
+    { "key": "project_id",   "value": "e2fa773e-e038-4bcc-b999-52907046cab6", "type": "string" },
+    { "key": "project_id_2", "value": "3498b8d3-b18b-497d-b9b1-d2b139b3c6c8", "type": "string" }
+  ],
+  "item": [
+
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login (PM)",
+          "event": [{ "listen": "test", "script": { "exec": ["const r=pm.response.json(); if(r.accessToken) pm.collectionVariables.set('token',r.accessToken);"], "type": "text/javascript" } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"pm@construction.com\",\n  \"password\": \"password123\"\n}" },
+            "url": { "raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth","login"] }
+          }
+        },
+        {
+          "name": "Login (Admin)",
+          "event": [{ "listen": "test", "script": { "exec": ["const r=pm.response.json(); if(r.accessToken) pm.collectionVariables.set('token',r.accessToken);"], "type": "text/javascript" } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"admin@construction.com\",\n  \"password\": \"password123\"\n}" },
+            "url": { "raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth","login"] }
+          }
+        },
+        {
+          "name": "Login (Engineer)",
+          "event": [{ "listen": "test", "script": { "exec": ["const r=pm.response.json(); if(r.accessToken) pm.collectionVariables.set('token',r.accessToken);"], "type": "text/javascript" } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"engineer1@construction.com\",\n  \"password\": \"password123\"\n}" },
+            "url": { "raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth","login"] }
+          }
+        },
+        {
+          "name": "Login (Client)",
+          "event": [{ "listen": "test", "script": { "exec": ["const r=pm.response.json(); if(r.accessToken) pm.collectionVariables.set('token',r.accessToken);"], "type": "text/javascript" } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"client@construction.com\",\n  \"password\": \"password123\"\n}" },
+            "url": { "raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth","login"] }
+          }
+        },
+        {
+          "name": "Register User",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"New Engineer\",\n  \"email\": \"newengineer@construction.com\",\n  \"phone\": \"9999900099\",\n  \"password\": \"password123\",\n  \"role\": \"SITE_ENGINEER\"\n}" },
+            "url": { "raw": "{{base_url}}/auth/register", "host": ["{{base_url}}"], "path": ["auth","register"] }
+          }
+        },
+        {
+          "name": "Mobile Register",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Mobile User\",\n  \"email\": \"mobile@construction.com\",\n  \"phone\": \"9999900098\",\n  \"password\": \"password123\",\n  \"role\": \"SITE_ENGINEER\"\n}" },
+            "url": { "raw": "{{base_url}}/auth/mobile/register", "host": ["{{base_url}}"], "path": ["auth","mobile","register"] }
+          }
+        },
+        {
+          "name": "Get Me",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/auth/me", "host": ["{{base_url}}"], "path": ["auth","me"] }
+          }
+        },
+        {
+          "name": "Refresh Token",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"refreshToken\": \"<refresh_token>\"\n}" },
+            "url": { "raw": "{{base_url}}/auth/refresh", "host": ["{{base_url}}"], "path": ["auth","refresh"] }
+          }
+        },
+        {
+          "name": "Update FCM Token",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"fcmToken\": \"<device_fcm_token>\"\n}" },
+            "url": { "raw": "{{base_url}}/auth/update-fcm", "host": ["{{base_url}}"], "path": ["auth","update-fcm"] }
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/auth/logout", "host": ["{{base_url}}"], "path": ["auth","logout"] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "Get All Users",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/users", "host": ["{{base_url}}"], "path": ["users"] }
+          }
+        },
+        {
+          "name": "Get Users By Role",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/users/by-role/SITE_ENGINEER", "host": ["{{base_url}}"], "path": ["users","by-role","SITE_ENGINEER"] }
+          }
+        },
+        {
+          "name": "Get User By ID",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/users/<user_id>", "host": ["{{base_url}}"], "path": ["users","<user_id>"] }
+          }
+        },
+        {
+          "name": "Update User",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Updated Name\",\n  \"phone\": \"9999900010\"\n}" },
+            "url": { "raw": "{{base_url}}/users/<user_id>", "host": ["{{base_url}}"], "path": ["users","<user_id>"] }
+          }
+        },
+        {
+          "name": "Reset Password",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"newPassword\": \"newpass123\"\n}" },
+            "url": { "raw": "{{base_url}}/users/<user_id>/reset-password", "host": ["{{base_url}}"], "path": ["users","<user_id>","reset-password"] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Projects",
+      "item": [
+        {
+          "name": "Get All Projects",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/projects", "host": ["{{base_url}}"], "path": ["projects"] }
+          }
+        },
+        {
+          "name": "Create Project",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"New Project\",\n  \"description\": \"Project description\",\n  \"address\": \"123 Main St, City\",\n  \"managerId\": \"<pm_user_id>\",\n  \"budget\": 5000000,\n  \"startDate\": \"2026-06-01\",\n  \"endDate\": \"2027-06-01\",\n  \"geofenceLat\": 28.5355,\n  \"geofenceLng\": 77.3910,\n  \"geofenceRadius\": 300\n}" },
+            "url": { "raw": "{{base_url}}/projects", "host": ["{{base_url}}"], "path": ["projects"] }
+          }
+        },
+        {
+          "name": "Get Project By ID",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/projects/{{project_id}}", "host": ["{{base_url}}"], "path": ["projects","{{project_id}}"] }
+          }
+        },
+        {
+          "name": "Update Project",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Updated Project Name\",\n  \"status\": \"ACTIVE\"\n}" },
+            "url": { "raw": "{{base_url}}/projects/{{project_id}}", "host": ["{{base_url}}"], "path": ["projects","{{project_id}}"] }
+          }
+        },
+        {
+          "name": "Assign Foreman",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"foremanId\": \"<foreman_user_id>\"\n}" },
+            "url": { "raw": "{{base_url}}/projects/{{project_id}}/assign-foreman", "host": ["{{base_url}}"], "path": ["projects","{{project_id}}","assign-foreman"] }
+          }
+        },
+        {
+          "name": "Update Geofence",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"geofenceLat\": 28.5355,\n  \"geofenceLng\": 77.3910,\n  \"geofenceRadius\": 400\n}" },
+            "url": { "raw": "{{base_url}}/projects/{{project_id}}/geofence", "host": ["{{base_url}}"], "path": ["projects","{{project_id}}","geofence"] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Tasks",
+      "item": [
+        {
+          "name": "Get All Tasks (by project)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/tasks?projectId={{project_id}}&page=1&limit=20",
+              "host": ["{{base_url}}"], "path": ["tasks"],
+              "query": [{ "key": "projectId", "value": "{{project_id}}" }, { "key": "page", "value": "1" }, { "key": "limit", "value": "20" }]
+            }
+          }
+        },
+        {
+          "name": "Get Tasks — filter IN_PROGRESS",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/tasks?projectId={{project_id}}&status=IN_PROGRESS",
+              "host": ["{{base_url}}"], "path": ["tasks"],
+              "query": [{ "key": "projectId", "value": "{{project_id}}" }, { "key": "status", "value": "IN_PROGRESS" }]
+            }
+          }
+        },
+        {
+          "name": "Create Task — from category (title auto-filled)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"projectId\": \"{{project_id}}\",\n  \"categoryId\": \"<sub_category_id>\",\n  \"assignedToId\": \"<engineer_user_id>\",\n  \"priority\": \"HIGH\",\n  \"startDate\": \"2026-06-01\",\n  \"dueDate\": \"2026-06-15\"\n}" },
+            "url": { "raw": "{{base_url}}/tasks", "host": ["{{base_url}}"], "path": ["tasks"] }
+          }
+        },
+        {
+          "name": "Create Task — custom (no category)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"projectId\": \"{{project_id}}\",\n  \"title\": \"Custom project-specific task\",\n  \"description\": \"Task not tied to any category\",\n  \"priority\": \"MEDIUM\",\n  \"dueDate\": \"2026-07-01\"\n}" },
+            "url": { "raw": "{{base_url}}/tasks", "host": ["{{base_url}}"], "path": ["tasks"] }
+          }
+        },
+        {
+          "name": "Create Task + Subtasks — Flow 1 (category-based)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"projectId\": \"{{project_id}}\",\n  \"categoryId\": \"<phase_category_id>\",\n  \"assignedToId\": \"<engineer_user_id>\",\n  \"priority\": \"HIGH\",\n  \"dueDate\": \"2026-07-15\",\n  \"subtasks\": [\n    { \"categoryId\": \"<sub_category_id_1>\", \"assignedToId\": \"<engineer_user_id>\", \"priority\": \"HIGH\" },\n    { \"categoryId\": \"<sub_category_id_2>\", \"assignedToId\": \"<engineer_user_id>\", \"priority\": \"MEDIUM\" },\n    { \"categoryId\": \"<sub_category_id_3>\" }\n  ]\n}" },
+            "url": { "raw": "{{base_url}}/tasks", "host": ["{{base_url}}"], "path": ["tasks"] }
+          }
+        },
+        {
+          "name": "Create Task + Subtasks — Flow 2 (custom, no category)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"projectId\": \"{{project_id}}\",\n  \"title\": \"NOC & Approvals\",\n  \"description\": \"All government clearances\",\n  \"priority\": \"CRITICAL\",\n  \"dueDate\": \"2026-06-30\",\n  \"subtasks\": [\n    { \"title\": \"Fire NOC\", \"assignedToId\": \"<engineer_user_id>\", \"priority\": \"HIGH\" },\n    { \"title\": \"Electricity Board Approval\", \"priority\": \"MEDIUM\" },\n    { \"title\": \"Municipal Corporation Permit\" }\n  ]\n}" },
+            "url": { "raw": "{{base_url}}/tasks", "host": ["{{base_url}}"], "path": ["tasks"] }
+          }
+        },
+        {
+          "name": "Create Subtask (parentId in body)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"parentId\": \"<parent_task_id>\",\n  \"categoryId\": \"<sub_category_id>\",\n  \"assignedToId\": \"<engineer_user_id>\",\n  \"priority\": \"HIGH\",\n  \"dueDate\": \"2026-06-10\"\n}" },
+            "url": { "raw": "{{base_url}}/tasks", "host": ["{{base_url}}"], "path": ["tasks"] }
+          }
+        },
+        {
+          "name": "Get Subtasks",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/tasks/<task_id>/subtasks", "host": ["{{base_url}}"], "path": ["tasks","<task_id>","subtasks"] }
+          }
+        },
+        {
+          "name": "Update Task Status",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"IN_PROGRESS\"\n}" },
+            "url": { "raw": "{{base_url}}/tasks/<task_id>/status", "host": ["{{base_url}}"], "path": ["tasks","<task_id>","status"] }
+          }
+        },
+        {
+          "name": "Update Task",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"Updated title\",\n  \"description\": \"Updated description\",\n  \"assignedToId\": \"<engineer_user_id>\",\n  \"priority\": \"CRITICAL\",\n  \"categoryId\": \"<sub_category_id>\",\n  \"startDate\": \"2026-06-01\",\n  \"dueDate\": \"2026-07-01\"\n}" },
+            "url": { "raw": "{{base_url}}/tasks/<task_id>", "host": ["{{base_url}}"], "path": ["tasks","<task_id>"] }
+          }
+        },
+        {
+          "name": "Delete Task",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/tasks/<task_id>", "host": ["{{base_url}}"], "path": ["tasks","<task_id>"] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Task Categories",
+      "item": [
+        {
+          "name": "Get All (grouped by phase)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/task-categories", "host": ["{{base_url}}"], "path": ["task-categories"] }
+          }
+        },
+        {
+          "name": "Get All including hidden (admin)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/task-categories?all=true", "host": ["{{base_url}}"], "path": ["task-categories"], "query": [{ "key": "all", "value": "true" }] }
+          }
+        },
+        {
+          "name": "Get Flat List (for dropdowns)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/task-categories/flat", "host": ["{{base_url}}"], "path": ["task-categories","flat"] }
+          }
+        },
+        {
+          "name": "Create Phase (parent category)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"New Phase\",\n  \"order\": 11\n}" },
+            "url": { "raw": "{{base_url}}/task-categories", "host": ["{{base_url}}"], "path": ["task-categories"] }
+          }
+        },
+        {
+          "name": "Create Item (sub-category)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"New Task Item\",\n  \"parentId\": \"<phase_category_id>\",\n  \"order\": 1\n}" },
+            "url": { "raw": "{{base_url}}/task-categories", "host": ["{{base_url}}"], "path": ["task-categories"] }
+          }
+        },
+        {
+          "name": "Update Category",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Renamed Item\",\n  \"order\": 2\n}" },
+            "url": { "raw": "{{base_url}}/task-categories/<category_id>", "host": ["{{base_url}}"], "path": ["task-categories","<category_id>"] }
+          }
+        },
+        {
+          "name": "Toggle Visibility",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/task-categories/<category_id>/visibility", "host": ["{{base_url}}"], "path": ["task-categories","<category_id>","visibility"] }
+          }
+        },
+        {
+          "name": "Delete Category",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/task-categories/<category_id>", "host": ["{{base_url}}"], "path": ["task-categories","<category_id>"] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Attendance",
+      "item": [
+        {
+          "name": "Punch In",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"projectId\": \"{{project_id}}\",\n  \"lat\": 28.5355,\n  \"lng\": 77.3910,\n  \"selfieUrl\": null\n}" },
+            "url": { "raw": "{{base_url}}/attendance/punch-in", "host": ["{{base_url}}"], "path": ["attendance","punch-in"] }
+          }
+        },
+        {
+          "name": "Punch Out",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"projectId\": \"{{project_id}}\",\n  \"lat\": 28.5355,\n  \"lng\": 77.3910\n}" },
+            "url": { "raw": "{{base_url}}/attendance/punch-out", "host": ["{{base_url}}"], "path": ["attendance","punch-out"] }
+          }
+        },
+        {
+          "name": "Today's Attendance",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/attendance/today?projectId={{project_id}}", "host": ["{{base_url}}"], "path": ["attendance","today"], "query": [{ "key": "projectId", "value": "{{project_id}}" }] }
+          }
+        },
+        {
+          "name": "Attendance History",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/attendance/history?projectId={{project_id}}", "host": ["{{base_url}}"], "path": ["attendance","history"], "query": [{ "key": "projectId", "value": "{{project_id}}" }] }
+          }
+        },
+        {
+          "name": "Attendance Status",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/attendance/status", "host": ["{{base_url}}"], "path": ["attendance","status"] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Labour",
+      "item": [
+        {
+          "name": "Get Labourers",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/labour/labourers?projectId={{project_id}}", "host": ["{{base_url}}"], "path": ["labour","labourers"], "query": [{ "key": "projectId", "value": "{{project_id}}" }] }
+          }
+        },
+        {
+          "name": "Add Labourer",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"New Labourer\",\n  \"phone\": \"9800000001\",\n  \"tradeType\": \"Mason\",\n  \"dailyWage\": 800,\n  \"projectId\": \"{{project_id}}\"\n}" },
+            "url": { "raw": "{{base_url}}/labour/labourers", "host": ["{{base_url}}"], "path": ["labour","labourers"] }
+          }
+        },
+        {
+          "name": "Mark Labour Attendance",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"projectId\": \"{{project_id}}\",\n  \"date\": \"2026-05-17\",\n  \"records\": [\n    { \"labourerId\": \"<labourer_id>\", \"status\": \"PRESENT\" }\n  ]\n}" },
+            "url": { "raw": "{{base_url}}/labour/attendance/mark", "host": ["{{base_url}}"], "path": ["labour","attendance","mark"] }
+          }
+        },
+        {
+          "name": "Get Labour Attendance",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/labour/attendance?projectId={{project_id}}", "host": ["{{base_url}}"], "path": ["labour","attendance"], "query": [{ "key": "projectId", "value": "{{project_id}}" }] }
+          }
+        },
+        {
+          "name": "Wage Report",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/labour/wage-report?projectId={{project_id}}", "host": ["{{base_url}}"], "path": ["labour","wage-report"], "query": [{ "key": "projectId", "value": "{{project_id}}" }] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Purchase Orders",
+      "item": [
+        {
+          "name": "Get All POs",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/purchase-orders?projectId={{project_id}}", "host": ["{{base_url}}"], "path": ["purchase-orders"], "query": [{ "key": "projectId", "value": "{{project_id}}" }] }
+          }
+        },
+        {
+          "name": "Create PO",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"projectId\": \"{{project_id}}\",\n  \"urgency\": \"NORMAL\",\n  \"notes\": \"Required for ground floor work\",\n  \"items\": [\n    {\n      \"itemName\": \"OPC Cement 53 Grade\",\n      \"itemCategory\": \"Cement\",\n      \"quantity\": 50,\n      \"unit\": \"Bag\",\n      \"unitPrice\": 380,\n      \"totalPrice\": 19000,\n      \"brand\": \"UltraTech\"\n    }\n  ]\n}" },
+            "url": { "raw": "{{base_url}}/purchase-orders", "host": ["{{base_url}}"], "path": ["purchase-orders"] }
+          }
+        },
+        {
+          "name": "Get PO By ID",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/purchase-orders/<po_id>", "host": ["{{base_url}}"], "path": ["purchase-orders","<po_id>"] }
+          }
+        },
+        {
+          "name": "Approve PO",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/purchase-orders/<po_id>/approve", "host": ["{{base_url}}"], "path": ["purchase-orders","<po_id>","approve"] }
+          }
+        },
+        {
+          "name": "Reject PO",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"rejectionReason\": \"Budget exceeded for this month\"\n}" },
+            "url": { "raw": "{{base_url}}/purchase-orders/<po_id>/reject", "host": ["{{base_url}}"], "path": ["purchase-orders","<po_id>","reject"] }
+          }
+        },
+        {
+          "name": "Assign Vendor",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"vendorId\": \"<vendor_id>\"\n}" },
+            "url": { "raw": "{{base_url}}/purchase-orders/<po_id>/assign-vendor", "host": ["{{base_url}}"], "path": ["purchase-orders","<po_id>","assign-vendor"] }
+          }
+        },
+        {
+          "name": "Assign Delivery Person",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"deliveryPersonId\": \"<delivery_user_id>\",\n  \"pickupAddress\": \"Vendor warehouse address\",\n  \"dropAddress\": \"Site address\"\n}" },
+            "url": { "raw": "{{base_url}}/purchase-orders/<po_id>/assign-delivery", "host": ["{{base_url}}"], "path": ["purchase-orders","<po_id>","assign-delivery"] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Deliveries",
+      "item": [
+        {
+          "name": "Get All Deliveries",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/deliveries", "host": ["{{base_url}}"], "path": ["deliveries"] }
+          }
+        },
+        {
+          "name": "Get Delivery By ID",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/deliveries/<delivery_id>", "host": ["{{base_url}}"], "path": ["deliveries","<delivery_id>"] }
+          }
+        },
+        {
+          "name": "Mark Picked Up",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/deliveries/<delivery_id>/picked-up", "host": ["{{base_url}}"], "path": ["deliveries","<delivery_id>","picked-up"] }
+          }
+        },
+        {
+          "name": "Mark Delivered",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"deliveryPhotoUrl\": \"https://example.com/photo.jpg\"\n}" },
+            "url": { "raw": "{{base_url}}/deliveries/<delivery_id>/delivered", "host": ["{{base_url}}"], "path": ["deliveries","<delivery_id>","delivered"] }
+          }
+        },
+        {
+          "name": "Verify Delivery",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/deliveries/<delivery_id>/verify", "host": ["{{base_url}}"], "path": ["deliveries","<delivery_id>","verify"] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Vendors",
+      "item": [
+        {
+          "name": "Get All Vendors",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/vendors", "host": ["{{base_url}}"], "path": ["vendors"] }
+          }
+        },
+        {
+          "name": "Create Vendor",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"New Vendor\",\n  \"phone\": \"9600000001\",\n  \"email\": \"vendor@example.com\",\n  \"address\": \"Vendor Address\",\n  \"gstNumber\": \"GSTIN12345\",\n  \"categories\": [\"Cement\", \"Sand\"],\n  \"paymentTerms\": \"Net 30\"\n}" },
+            "url": { "raw": "{{base_url}}/vendors", "host": ["{{base_url}}"], "path": ["vendors"] }
+          }
+        },
+        {
+          "name": "Get Vendor By ID",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/vendors/<vendor_id>", "host": ["{{base_url}}"], "path": ["vendors","<vendor_id>"] }
+          }
+        },
+        {
+          "name": "Update Vendor",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"rating\": 4.5,\n  \"paymentTerms\": \"Net 15\"\n}" },
+            "url": { "raw": "{{base_url}}/vendors/<vendor_id>", "host": ["{{base_url}}"], "path": ["vendors","<vendor_id>"] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Materials",
+      "item": [
+        {
+          "name": "Get Material Catalog",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/materials/catalog", "host": ["{{base_url}}"], "path": ["materials","catalog"] }
+          }
+        },
+        {
+          "name": "Get Catalog Categories",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/materials/catalog/categories", "host": ["{{base_url}}"], "path": ["materials","catalog","categories"] }
+          }
+        },
+        {
+          "name": "Get Material By ID",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/materials/catalog/<material_id>", "host": ["{{base_url}}"], "path": ["materials","catalog","<material_id>"] }
+          }
+        },
+        {
+          "name": "Create Material",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"TMT Bar 16mm\",\n  \"category\": \"Steel\",\n  \"unit\": \"Kg\",\n  \"defaultPrice\": 60,\n  \"brands\": [\"Tata Tiscon\", \"SAIL\"]\n}" },
+            "url": { "raw": "{{base_url}}/materials/catalog", "host": ["{{base_url}}"], "path": ["materials","catalog"] }
+          }
+        },
+        {
+          "name": "Update Material",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"defaultPrice\": 65\n}" },
+            "url": { "raw": "{{base_url}}/materials/catalog/<material_id>", "host": ["{{base_url}}"], "path": ["materials","catalog","<material_id>"] }
+          }
+        },
+        {
+          "name": "Delete Material",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/materials/catalog/<material_id>", "host": ["{{base_url}}"], "path": ["materials","catalog","<material_id>"] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Dashboard",
+      "item": [
+        {
+          "name": "Stats",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/dashboard/stats", "host": ["{{base_url}}"], "path": ["dashboard","stats"] }
+          }
+        },
+        {
+          "name": "Attendance Chart",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/dashboard/attendance-chart", "host": ["{{base_url}}"], "path": ["dashboard","attendance-chart"] }
+          }
+        },
+        {
+          "name": "PO Pipeline",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/dashboard/po-pipeline", "host": ["{{base_url}}"], "path": ["dashboard","po-pipeline"] }
+          }
+        },
+        {
+          "name": "Recent Activity",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/dashboard/recent-activity", "host": ["{{base_url}}"], "path": ["dashboard","recent-activity"] }
+          }
+        },
+        {
+          "name": "Project Summary",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/dashboard/project-summary/{{project_id}}", "host": ["{{base_url}}"], "path": ["dashboard","project-summary","{{project_id}}"] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Notifications",
+      "item": [
+        {
+          "name": "Get Notifications",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/notifications", "host": ["{{base_url}}"], "path": ["notifications"] }
+          }
+        },
+        {
+          "name": "Mark As Read",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/notifications/<notification_id>/read", "host": ["{{base_url}}"], "path": ["notifications","<notification_id>","read"] }
+          }
+        },
+        {
+          "name": "Mark All As Read",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/notifications/read-all", "host": ["{{base_url}}"], "path": ["notifications","read-all"] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Foreman",
+      "item": [
+        {
+          "name": "Get Foreman Sites",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/foreman/sites", "host": ["{{base_url}}"], "path": ["foreman","sites"] }
+          }
+        },
+        {
+          "name": "Get Site Labour",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/foreman/sites/{{project_id}}/labour", "host": ["{{base_url}}"], "path": ["foreman","sites","{{project_id}}","labour"] }
+          }
+        },
+        {
+          "name": "Add Labour Entry",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"labourCount\": 10,\n  \"pricePerLabour\": 600,\n  \"totalCost\": 6000,\n  \"date\": \"2026-05-17\",\n  \"notes\": \"Mason + helpers\"\n}" },
+            "url": { "raw": "{{base_url}}/foreman/sites/{{project_id}}/labour", "host": ["{{base_url}}"], "path": ["foreman","sites","{{project_id}}","labour"] }
+          }
+        },
+        {
+          "name": "Update Labour Entry",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"labourCount\": 12,\n  \"totalCost\": 7200\n}" },
+            "url": { "raw": "{{base_url}}/foreman/labour/<entry_id>", "host": ["{{base_url}}"], "path": ["foreman","labour","<entry_id>"] }
+          }
+        },
+        {
+          "name": "Delete Labour Entry",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/foreman/labour/<entry_id>", "host": ["{{base_url}}"], "path": ["foreman","labour","<entry_id>"] }
+          }
+        },
+        {
+          "name": "Labour Summary",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/foreman/sites/{{project_id}}/labour/summary", "host": ["{{base_url}}"], "path": ["foreman","sites","{{project_id}}","labour","summary"] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Issues",
+      "item": [
+        {
+          "name": "Get All Issues",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/issues?projectId={{project_id}}", "host": ["{{base_url}}"], "path": ["issues"], "query": [{ "key": "projectId", "value": "{{project_id}}" }] }
+          }
+        },
+        {
+          "name": "Create Issue",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"projectId\": \"{{project_id}}\",\n  \"title\": \"Crack in wall\",\n  \"description\": \"Hairline crack visible on east wall, ground floor.\",\n  \"photoUrls\": []\n}" },
+            "url": { "raw": "{{base_url}}/issues", "host": ["{{base_url}}"], "path": ["issues"] }
+          }
+        },
+        {
+          "name": "Get Issue By ID",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/issues/<issue_id>", "host": ["{{base_url}}"], "path": ["issues","<issue_id>"] }
+          }
+        },
+        {
+          "name": "Update Issue Status",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"IN_PROGRESS\"\n}" },
+            "url": { "raw": "{{base_url}}/issues/<issue_id>", "host": ["{{base_url}}"], "path": ["issues","<issue_id>"] }
+          }
+        },
+        {
+          "name": "Delete Issue",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/issues/<issue_id>", "host": ["{{base_url}}"], "path": ["issues","<issue_id>"] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Suggestions",
+      "item": [
+        {
+          "name": "Get All Suggestions",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/suggestions?projectId={{project_id}}", "host": ["{{base_url}}"], "path": ["suggestions"], "query": [{ "key": "projectId", "value": "{{project_id}}" }] }
+          }
+        },
+        {
+          "name": "Create Suggestion",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"projectId\": \"{{project_id}}\",\n  \"title\": \"Add extra parking space\",\n  \"description\": \"Suggest converting the east corner into covered parking.\"\n}" },
+            "url": { "raw": "{{base_url}}/suggestions", "host": ["{{base_url}}"], "path": ["suggestions"] }
+          }
+        },
+        {
+          "name": "Get Suggestion By ID",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/suggestions/<suggestion_id>", "host": ["{{base_url}}"], "path": ["suggestions","<suggestion_id>"] }
+          }
+        },
+        {
+          "name": "Update Suggestion",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"REVIEWED\"\n}" },
+            "url": { "raw": "{{base_url}}/suggestions/<suggestion_id>", "host": ["{{base_url}}"], "path": ["suggestions","<suggestion_id>"] }
+          }
+        },
+        {
+          "name": "Delete Suggestion",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/suggestions/<suggestion_id>", "host": ["{{base_url}}"], "path": ["suggestions","<suggestion_id>"] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Uploads",
+      "item": [
+        {
+          "name": "Upload Single Photo",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "photo",      "type": "file", "src": "" },
+                { "key": "projectId",  "value": "{{project_id}}", "type": "text" },
+                { "key": "entityType", "value": "task",           "type": "text" },
+                { "key": "entityId",   "value": "<task_id>",      "type": "text" },
+                { "key": "caption",    "value": "Site progress",  "type": "text" }
+              ]
+            },
+            "url": { "raw": "{{base_url}}/uploads/photo", "host": ["{{base_url}}"], "path": ["uploads","photo"] }
+          }
+        },
+        {
+          "name": "Upload Multiple Photos",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "photos",     "type": "file", "src": "" },
+                { "key": "projectId",  "value": "{{project_id}}", "type": "text" },
+                { "key": "entityType", "value": "task",           "type": "text" },
+                { "key": "entityId",   "value": "<task_id>",      "type": "text" }
+              ]
+            },
+            "url": { "raw": "{{base_url}}/uploads/multiple", "host": ["{{base_url}}"], "path": ["uploads","multiple"] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{base_url}}/health", "host": ["{{base_url}}"], "path": ["health"] }
+          }
+        }
+      ]
+    }
+
+  ]
+}

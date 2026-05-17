@@ -21,6 +21,7 @@ const materialRoutes = require('./routes/materials');
 const foremanRoutes= require('./routes/foreman');
 const issueRoutes = require('./routes/issues');
 const suggestionRoutes = require('./routes/suggestions');
+const taskCategoryRoutes = require('./routes/taskCategories');
 
 const { errorHandler } = require('./middleware/errorHandler');
 
@@ -77,6 +78,7 @@ app.use('/api/materials', materialRoutes);
 app.use('/api/foreman',foremanRoutes);
 app.use('/api/issues', issueRoutes);
 app.use('/api/suggestions', suggestionRoutes);
+app.use('/api/task-categories', taskCategoryRoutes);
 
 
 // Health check
