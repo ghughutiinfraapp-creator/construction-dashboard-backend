@@ -124,4 +124,24 @@ router.put('/:id/geofence', authenticate, authorize('SUPER_ADMIN', 'PROJECT_MANA
   } catch (error) { next(error); }
 });
 
+// GET /api/projects/:id/photos
+// Optional filter: ?entityType=task|purchase_order|delivery
+router.get('/:id/photos', authenticate, async (req, res, next) => {
+  try {
+    const where = { projectId: req.params.id };
+    if (req.query.entityType) where.entityType = req.query.entityType;
+
+    const photos = await prisma.photo.findMany({
+      where,
+      include: {
+        uploadedBy: { select: { id: true, name: true } },
+        task:       { select: { id: true, title: true } },
+      },
+      orderBy: { capturedAt: 'desc' }
+    });
+
+    res.json({ photos });
+  } catch (error) { next(error); }
+});
+
 module.exports = router;

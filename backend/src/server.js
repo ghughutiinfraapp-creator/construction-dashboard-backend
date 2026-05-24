@@ -23,7 +23,6 @@ const issueRoutes = require('./routes/issues');
 const suggestionRoutes = require('./routes/suggestions');
 const taskCategoryRoutes = require('./routes/taskCategories');
 const paymentScheduleRoutes = require('./routes/paymentSchedules');
-const photoRoutes = require('./routes/photos');
 
 const { errorHandler } = require('./middleware/errorHandler');
 
@@ -82,11 +81,11 @@ app.use('/api/issues', issueRoutes);
 app.use('/api/suggestions', suggestionRoutes);
 app.use('/api/task-categories', taskCategoryRoutes);
 app.use('/api/payment-schedules', paymentScheduleRoutes);
-app.use('/api/photos', photoRoutes);
+
 
 
 // Health check
-app.get('/api/health', (req, res) => {
+app.get('/api/health', (_req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString(), version: '1.0.0' });
 });
 
