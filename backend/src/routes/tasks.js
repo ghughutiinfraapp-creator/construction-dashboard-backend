@@ -2,6 +2,53 @@ const router = require('express').Router();
 const prisma = require('../config/database');
 const { authenticate, authorize } = require('../middleware/auth');
 const NotificationService = require('../services/notificationService');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+const { v4: uuidv4 } = require('uuid');
+
+const TASK_UPLOAD_DIR = path.join(__dirname, '../../uploads/tasks');
+
+function slugify(str) {
+  return str.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
+
+// Middleware: resolve task + attach to req so the multer destination can use it
+async function attachTask(req, res, next) {
+  try {
+    const task = await prisma.task.findUnique({
+      where: { id: req.params.id },
+      include: { project: { select: { id: true, name: true } } }
+    });
+    if (!task) return res.status(404).json({ error: 'Task not found' });
+    req.task = task;
+    next();
+  } catch (err) { next(err); }
+}
+
+// Returns a configured multer instance that stores files under
+// uploads/tasks/{project-name}/{task-title}/completed/{YYYY-MM-DD}/
+function buildTaskUpload(task) {
+  const dir = path.join(
+    TASK_UPLOAD_DIR,
+    slugify(task.project.name),
+    slugify(task.title),
+    'completed',
+    new Date().toISOString().slice(0, 10)
+  );
+  fs.mkdirSync(dir, { recursive: true });
+  return multer({
+    storage: multer.diskStorage({
+      destination: (_, __, cb) => cb(null, dir),
+      filename: (_, file, cb) => cb(null, `${uuidv4()}${path.extname(file.originalname)}`)
+    }),
+    limits: { fileSize: parseInt(process.env.MAX_FILE_SIZE) || 10 * 1024 * 1024 },
+    fileFilter: (_, file, cb) => {
+      if (/jpeg|jpg|png|webp/.test(path.extname(file.originalname).toLowerCase())) cb(null, true);
+      else cb(new Error('Only JPEG, PNG, and WebP images are allowed'));
+    }
+  });
+}
 
 // Valid TaskStatus values matching the Prisma enum
 const DONE_STATUSES = ['COMPLETED', 'VERIFIED'];
@@ -12,8 +59,8 @@ router.get('/', authenticate, async (req, res, next) => {
     const { projectId, status, assignedToId, page = 1, limit = 20 } = req.query;
 
     const where = { parentId: null }; // top-level tasks only
-    if (projectId)    where.projectId    = projectId;
-    if (status)       where.status       = status;
+    if (projectId) where.projectId = projectId;
+    if (status) where.status = status;
     if (assignedToId) where.assignedToId = assignedToId;
     if (req.user.role === 'SITE_ENGINEER') where.assignedToId = req.user.id;
 
@@ -23,14 +70,14 @@ router.get('/', authenticate, async (req, res, next) => {
         skip: (page - 1) * limit,
         take: parseInt(limit),
         include: {
-          project:    { select: { id: true, name: true } },
+          project: { select: { id: true, name: true } },
           assignedTo: { select: { id: true, name: true, avatar: true } },
-          createdBy:  { select: { id: true, name: true } },
-          category:   { select: { id: true, name: true } },
+          createdBy: { select: { id: true, name: true } },
+          category: { select: { id: true, name: true } },
           subtasks: {
             include: {
               assignedTo: { select: { id: true, name: true, avatar: true } },
-              category:   { select: { id: true, name: true } },
+              category: { select: { id: true, name: true } },
             },
             orderBy: { createdAt: 'asc' },
           },
@@ -72,7 +119,7 @@ router.post('/', authenticate, authorize('SUPER_ADMIN', 'PROJECT_MANAGER'), asyn
         select: { projectId: true, project: { select: { name: true } } },
       });
       if (!parent) return res.status(404).json({ error: 'Parent task not found' });
-      projectId   = parent.projectId;
+      projectId = parent.projectId;
       projectName = parent.project.name;
     }
 
@@ -86,20 +133,20 @@ router.post('/', authenticate, authorize('SUPER_ADMIN', 'PROJECT_MANAGER'), asyn
     const task = await prisma.task.create({
       data: {
         projectId,
-        parentId:     parentId     || null,
+        parentId: parentId || null,
         title,
-        description:  description  || null,
+        description: description || null,
         assignedToId: assignedToId || null,
-        priority:     priority     || 'MEDIUM',
-        createdById:  req.user.id,
-        startDate:    startDate    ? new Date(startDate) : null,
-        dueDate:      dueDate      ? new Date(dueDate)   : null,
-        categoryId:   categoryId   || null,
+        priority: priority || 'MEDIUM',
+        createdById: req.user.id,
+        startDate: startDate ? new Date(startDate) : null,
+        dueDate: dueDate ? new Date(dueDate) : null,
+        categoryId: categoryId || null,
       },
       include: {
         assignedTo: { select: { id: true, name: true, avatar: true } },
-        project:    { select: { id: true, name: true } },
-        category:   { select: { id: true, name: true } },
+        project: { select: { id: true, name: true } },
+        category: { select: { id: true, name: true } },
       },
     });
 
@@ -111,11 +158,11 @@ router.post('/', authenticate, authorize('SUPER_ADMIN', 'PROJECT_MANAGER'), asyn
         const notifier = new NotificationService(req.app.get('io'));
         await notifier.send({
           userId: assignedToId,
-          title:  parentId ? 'New Subtask Assigned' : 'New Task Assigned',
-          body:   `You have been assigned: "${task.title}" in ${projectName}`,
+          title: parentId ? 'New Subtask Assigned' : 'New Task Assigned',
+          body: `You have been assigned: "${task.title}" in ${projectName}`,
           type: 'TASK_ASSIGNED', entityType: 'task', entityId: task.id,
         });
-      } catch (_) {}
+      } catch (_) { }
     }
 
     // Create subtasks if provided in the same request
@@ -136,19 +183,19 @@ router.post('/', authenticate, authorize('SUPER_ADMIN', 'PROJECT_MANAGER'), asyn
           prisma.task.create({
             data: {
               projectId,
-              parentId:     task.id,
-              title:        sub.title,
-              description:  sub.description  || null,
+              parentId: task.id,
+              title: sub.title,
+              description: sub.description || null,
               assignedToId: sub.assignedToId || null,
-              priority:     sub.priority     || 'MEDIUM',
-              createdById:  req.user.id,
-              startDate:    sub.startDate    ? new Date(sub.startDate) : null,
-              dueDate:      sub.dueDate      ? new Date(sub.dueDate)   : null,
-              categoryId:   sub.categoryId   || null,
+              priority: sub.priority || 'MEDIUM',
+              createdById: req.user.id,
+              startDate: sub.startDate ? new Date(sub.startDate) : null,
+              dueDate: sub.dueDate ? new Date(sub.dueDate) : null,
+              categoryId: sub.categoryId || null,
             },
             include: {
               assignedTo: { select: { id: true, name: true, avatar: true } },
-              category:   { select: { id: true, name: true } },
+              category: { select: { id: true, name: true } },
             },
           })
         )
@@ -161,11 +208,11 @@ router.post('/', authenticate, authorize('SUPER_ADMIN', 'PROJECT_MANAGER'), asyn
           try {
             await notifier.send({
               userId: sub.assignedToId,
-              title:  'New Subtask Assigned',
-              body:   `You have been assigned: "${sub.title}" in ${projectName}`,
+              title: 'New Subtask Assigned',
+              body: `You have been assigned: "${sub.title}" in ${projectName}`,
               type: 'TASK_ASSIGNED', entityType: 'task', entityId: sub.id,
             });
-          } catch (_) {}
+          } catch (_) { }
         }
       }
     }
@@ -183,13 +230,60 @@ router.get('/:id/subtasks', authenticate, async (req, res, next) => {
       where: { parentId: req.params.id },
       include: {
         assignedTo: { select: { id: true, name: true, avatar: true } },
-        createdBy:  { select: { id: true, name: true } },
-        category:   { select: { id: true, name: true } },
+        createdBy: { select: { id: true, name: true } },
+        category: { select: { id: true, name: true } },
         _count: { select: { photos: true } },
       },
       orderBy: { createdAt: 'asc' },
     });
     res.json({ subtasks });
+  } catch (error) { next(error); }
+});
+
+// POST /api/tasks/:id/photos — attach completion-verification images
+// Folder layout: uploads/tasks/{project}/{task-title}/completed/{date}/
+router.post('/:id/photos', authenticate, attachTask, (req, res, next) => {
+  if (!['COMPLETED', 'VERIFIED'].includes(req.task.status))
+    return res.status(400).json({ error: 'Photos can only be attached to completed or verified tasks' });
+
+  buildTaskUpload(req.task).array('photos', 20)(req, res, async (err) => {
+    if (err) return next(err);
+    if (!req.files || req.files.length === 0)
+      return res.status(400).json({ error: 'No files uploaded' });
+
+    try {
+      const projectSlug = slugify(req.task.project.name);
+      const taskSlug = slugify(req.task.title);
+      const date = new Date().toISOString().slice(0, 10);
+
+      const photos = await Promise.all(req.files.map(file =>
+        prisma.photo.create({
+          data: {
+            uploadedById: req.user.id,
+            projectId: req.task.project.id,
+            taskId: req.task.id,
+            entityType: 'task',
+            entityId: req.task.id,
+            url: `/uploads/tasks/${projectSlug}/${taskSlug}/completed/${date}/${file.filename}`,
+            caption: req.body.caption || null,
+          }
+        })
+      ));
+
+      res.status(201).json({ photos });
+    } catch (error) { next(error); }
+  });
+});
+
+// GET /api/tasks/:id/photos
+router.get('/:id/photos', authenticate, async (req, res, next) => {
+  try {
+    const photos = await prisma.photo.findMany({
+      where: { taskId: req.params.id },
+      include: { uploadedBy: { select: { id: true, name: true } } },
+      orderBy: { capturedAt: 'desc' }
+    });
+    res.json({ photos });
   } catch (error) { next(error); }
 });
 
@@ -206,7 +300,7 @@ router.put('/:id/status', authenticate, async (req, res, next) => {
     const task = await prisma.task.update({
       where: { id: req.params.id }, data,
       include: {
-        project:    { select: { id: true, name: true, managerId: true } },
+        project: { select: { id: true, name: true, managerId: true } },
         assignedTo: { select: { name: true } },
       },
     });
@@ -215,23 +309,23 @@ router.put('/:id/status', authenticate, async (req, res, next) => {
     if (task.parentId) {
       try {
         const siblings = await prisma.task.findMany({
-          where:  { parentId: task.parentId },
+          where: { parentId: task.parentId },
           select: { status: true },
         });
-        const allDone    = siblings.every(s => DONE_STATUSES.includes(s.status));
+        const allDone = siblings.every(s => DONE_STATUSES.includes(s.status));
         const anyBlocked = siblings.some(s => s.status === 'BLOCKED');
-        const anyActive  = siblings.some(s => s.status === 'IN_PROGRESS');
+        const anyActive = siblings.some(s => s.status === 'IN_PROGRESS');
 
         let parentStatus = 'NOT_STARTED';
-        if (allDone)      parentStatus = 'COMPLETED';
+        if (allDone) parentStatus = 'COMPLETED';
         else if (anyBlocked) parentStatus = 'BLOCKED';
-        else if (anyActive)  parentStatus = 'IN_PROGRESS';
+        else if (anyActive) parentStatus = 'IN_PROGRESS';
 
         await prisma.task.update({
           where: { id: task.parentId },
-          data:  { status: parentStatus, completedAt: allDone ? new Date() : null },
+          data: { status: parentStatus, completedAt: allDone ? new Date() : null },
         });
-      } catch (_) {}
+      } catch (_) { }
     }
 
     // Notify PM on completion
@@ -240,11 +334,11 @@ router.put('/:id/status', authenticate, async (req, res, next) => {
         const notifier = new NotificationService(req.app.get('io'));
         await notifier.send({
           userId: task.project.managerId,
-          title:  task.parentId ? 'Subtask Completed' : 'Task Completed',
-          body:   `"${task.title}" completed by ${task.assignedTo?.name ?? 'someone'}`,
+          title: task.parentId ? 'Subtask Completed' : 'Task Completed',
+          body: `"${task.title}" completed by ${task.assignedTo?.name ?? 'someone'}`,
           type: 'TASK_UPDATED', entityType: 'task', entityId: task.id,
         });
-      } catch (_) {}
+      } catch (_) { }
     }
 
     res.json({ task });
@@ -256,21 +350,21 @@ router.put('/:id', authenticate, authorize('SUPER_ADMIN', 'PROJECT_MANAGER'), as
   try {
     const { title, description, assignedToId, priority, startDate, dueDate, categoryId } = req.body;
     const data = {};
-    if (title        !== undefined) data.title        = title;
-    if (description  !== undefined) data.description  = description;
+    if (title !== undefined) data.title = title;
+    if (description !== undefined) data.description = description;
     if (assignedToId !== undefined) data.assignedToId = assignedToId;
-    if (priority     !== undefined) data.priority     = priority;
-    if (startDate    !== undefined) data.startDate    = startDate ? new Date(startDate) : null;
-    if (dueDate      !== undefined) data.dueDate      = dueDate   ? new Date(dueDate)   : null;
-    if (categoryId   !== undefined) data.categoryId   = categoryId || null;
+    if (priority !== undefined) data.priority = priority;
+    if (startDate !== undefined) data.startDate = startDate ? new Date(startDate) : null;
+    if (dueDate !== undefined) data.dueDate = dueDate ? new Date(dueDate) : null;
+    if (categoryId !== undefined) data.categoryId = categoryId || null;
 
     const task = await prisma.task.update({
       where: { id: req.params.id },
       data,
       include: {
-        project:    { select: { id: true, name: true } },
+        project: { select: { id: true, name: true } },
         assignedTo: { select: { id: true, name: true, avatar: true } },
-        category:   { select: { id: true, name: true } },
+        category: { select: { id: true, name: true } },
       },
     });
     res.json({ task });

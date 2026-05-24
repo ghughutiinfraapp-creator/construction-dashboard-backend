@@ -13,7 +13,8 @@
     "db:generate": "npx prisma generate",
     "db:seed": "node prisma/seed.js",
     "db:seed:prod": "NODE_ENV=production node -e \"require('dotenv').config({path:'.env.production'});\" prisma/seed.js",
-    "db:studio": "npx prisma studio"
+    "db:studio": "npx prisma studio",
+    "test": "node --test src/**/*.test.js"
   },
   "dependencies": {
     "@prisma/client": "^5.10.0",

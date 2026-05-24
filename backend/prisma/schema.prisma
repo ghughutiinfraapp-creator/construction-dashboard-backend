@@ -332,19 +332,22 @@ model PurchaseOrder {
   totalAmount     Decimal?  @db.Decimal(12, 2) @map("total_amount")
   approvedById    String?   @map("approved_by_id")
   approvedAt      DateTime? @map("approved_at")
-  notes           String?
-  rejectionReason String?   @map("rejection_reason")
-  createdAt       DateTime  @default(now()) @map("created_at")
-  updatedAt       DateTime  @updatedAt @map("updated_at")
+  notes              String?
+  rejectionReason    String?   @map("rejection_reason")
+  transferredFromId  String?   @map("transferred_from_id")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
 
   // Relations
-  project    Project   @relation(fields: [projectId], references: [id])
-  createdBy  User      @relation("POCreator", fields: [createdById], references: [id])
-  vendor     Vendor?   @relation(fields: [vendorId], references: [id])
-  approvedBy User?     @relation("POApprover", fields: [approvedById], references: [id])
-  items      POItem[]
-  delivery   Delivery?
-  photos     Photo[]
+  project         Project        @relation(fields: [projectId], references: [id])
+  createdBy       User           @relation("POCreator", fields: [createdById], references: [id])
+  vendor          Vendor?        @relation(fields: [vendorId], references: [id])
+  approvedBy      User?          @relation("POApprover", fields: [approvedById], references: [id])
+  transferredFrom PurchaseOrder? @relation("POTransfer", fields: [transferredFromId], references: [id])
+  transferredTo   PurchaseOrder[] @relation("POTransfer")
+  items           POItem[]
+  delivery        Delivery?
+  photos          Photo[]
 
   @@map("purchase_orders")
 }
@@ -360,6 +363,7 @@ model POItem {
   totalPrice      Decimal? @db.Decimal(10, 2) @map("total_price")
   brand           String?
   notes           String?
+  transferredQty  Float    @default(0) @map("transferred_qty")
 
   // Relations
   purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)

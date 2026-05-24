@@ -165,6 +165,103 @@ router.put('/:id/assign-vendor', authenticate, authorize('FINANCE', 'SUPER_ADMIN
   } catch (error) { next(error); }
 });
 
+// POST /api/purchase-orders/:id/transfer-materials
+// Transfers unused materials from this PO to another project, creating a closed PO there.
+// Body: { targetProjectId, items: [{ itemId, quantity }], notes? }
+router.post('/:id/transfer-materials', authenticate, authorize('FINANCE', 'PROJECT_MANAGER', 'SUPER_ADMIN'), async (req, res, next) => {
+  try {
+    const { targetProjectId, items, notes } = req.body;
+    if (!targetProjectId) return res.status(400).json({ error: 'targetProjectId is required' });
+    if (!items || items.length === 0) return res.status(400).json({ error: 'items array is required' });
+
+    const sourcePO = await prisma.purchaseOrder.findUnique({
+      where: { id: req.params.id },
+      include: { items: true, project: { select: { name: true } } }
+    });
+    if (!sourcePO) return res.status(404).json({ error: 'Purchase order not found' });
+
+    const targetProject = await prisma.project.findUnique({
+      where: { id: targetProjectId },
+      select: { id: true, name: true }
+    });
+    if (!targetProject) return res.status(404).json({ error: 'Target project not found' });
+
+    // Validate each item: must belong to source PO and have enough remaining qty
+    const transferMap = new Map(items.map(i => [i.itemId, parseFloat(i.quantity)]));
+    const errors = [];
+    for (const [itemId, qty] of transferMap) {
+      const sourceItem = sourcePO.items.find(i => i.id === itemId);
+      if (!sourceItem) { errors.push(`Item ${itemId} not found in this PO`); continue; }
+      const remaining = sourceItem.quantity - (sourceItem.transferredQty || 0);
+      if (qty <= 0) errors.push(`Transfer quantity for ${sourceItem.itemName} must be positive`);
+      else if (qty > remaining) errors.push(`${sourceItem.itemName}: only ${remaining} ${sourceItem.unit} available (${qty} requested)`);
+    }
+    if (errors.length > 0) return res.status(400).json({ errors });
+
+    const poNumber = await generatePONumber();
+
+    const [transferPO] = await prisma.$transaction(async (tx) => {
+      // Deduct transferred quantities from source items
+      await Promise.all(
+        [...transferMap.entries()].map(([itemId, qty]) =>
+          tx.pOItem.update({
+            where: { id: itemId },
+            data: { transferredQty: { increment: qty } }
+          })
+        )
+      );
+
+      // Build transfer PO items with current pricing from source
+      const transferItems = items.map(({ itemId, quantity }) => {
+        const src = sourcePO.items.find(i => i.id === itemId);
+        const qty = parseFloat(quantity);
+        const unitPrice = src.unitPrice ? parseFloat(src.unitPrice) : null;
+        return {
+          itemName: src.itemName, itemCategory: src.itemCategory,
+          quantity: qty, unit: src.unit,
+          unitPrice: unitPrice ? unitPrice : null,
+          totalPrice: unitPrice ? unitPrice * qty : null,
+          brand: src.brand,
+          notes: `Transferred from PO ${sourcePO.poNumber} (${sourcePO.project.name})`
+        };
+      });
+
+      const totalAmount = transferItems.reduce((sum, i) => sum + (i.totalPrice || 0), 0);
+
+      const newPO = await tx.purchaseOrder.create({
+        data: {
+          poNumber, projectId: targetProjectId,
+          createdById: req.user.id,
+          status: 'CLOSED',
+          urgency: sourcePO.urgency,
+          transferredFromId: sourcePO.id,
+          totalAmount: totalAmount || null,
+          notes: notes
+            ? `Material transfer from PO ${sourcePO.poNumber} (${sourcePO.project.name}). ${notes}`
+            : `Material transfer from PO ${sourcePO.poNumber} (${sourcePO.project.name})`,
+          items: { create: transferItems }
+        },
+        include: {
+          items: true,
+          project: { select: { id: true, name: true } },
+          transferredFrom: { select: { id: true, poNumber: true } }
+        }
+      });
+
+      return [newPO];
+    });
+
+    const notifier = new NotificationService(req.app.get('io'));
+    await notifier.sendToRole({
+      role: 'FINANCE', title: 'Materials Transferred',
+      body: `${items.length} item(s) transferred from PO ${sourcePO.poNumber} to ${targetProject.name} (new PO ${poNumber})`,
+      type: 'PO_SUBMITTED', entityType: 'purchase_order', entityId: transferPO.id
+    });
+
+    res.status(201).json({ transferPO, sourcePOId: sourcePO.id });
+  } catch (error) { next(error); }
+});
+
 // PUT /api/purchase-orders/:id/assign-delivery (Assign delivery person)
 router.put('/:id/assign-delivery', authenticate, authorize('FINANCE', 'PROJECT_MANAGER', 'SUPER_ADMIN'), async (req, res, next) => {
   try {
