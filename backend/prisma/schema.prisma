@@ -84,7 +84,24 @@ enum NotificationType {
   DELIVERY_COMPLETED
   VERIFICATION_NEEDED
   ATTENDANCE_REMINDER
+  PAYMENT_DUE
+  PAYMENT_RECEIVED
   GENERAL
+}
+
+enum InstallmentStatus {
+  PENDING
+  PARTIAL
+  PAID
+  OVERDUE
+}
+
+enum PaymentMode {
+  CASH
+  CHEQUE
+  BANK_TRANSFER
+  UPI
+  ONLINE
 }
 
 enum IssueStatus {
@@ -131,10 +148,12 @@ model User {
   notifications      Notification[]
   refreshTokens      RefreshToken[]
 
-  foremanProjects  Project[]     @relation("ForemanProjects")
-  labourEntries    LabourEntry[] @relation("LabourCreatedBy")
-  issues           Issue[]
-  suggestions      Suggestion[]
+  foremanProjects   Project[]        @relation("ForemanProjects")
+  labourEntries     LabourEntry[]    @relation("LabourCreatedBy")
+  issues            Issue[]
+  suggestions       Suggestion[]
+  paymentSchedules  PaymentSchedule[] @relation("ScheduleCreator")
+  paymentRecords    PaymentRecord[]   @relation("PaymentRecorder")
 
   @@map("users")
 }
@@ -180,11 +199,12 @@ model Project {
   photos           Photo[]
   
   
-  foremanId    String?
-  foreman      User?          @relation("ForemanProjects", fields: [foremanId], references: [id])
-  labourEntries LabourEntry[]
-  issues        Issue[]
-  suggestions   Suggestion[]
+  foremanId       String?
+  foreman         User?           @relation("ForemanProjects", fields: [foremanId], references: [id])
+  labourEntries   LabourEntry[]
+  issues          Issue[]
+  suggestions     Suggestion[]
+  paymentSchedule PaymentSchedule?
 
   @@map("projects")
 }
@@ -514,4 +534,57 @@ model Suggestion {
   client  User    @relation(fields: [clientId], references: [id])
 
   @@map("suggestions")
+}
+
+// ─── PAYMENT SCHEDULES ───────────────────────────────────────────────
+model PaymentSchedule {
+  id          String   @id @default(uuid())
+  projectId   String   @unique @map("project_id")
+  totalAmount Decimal  @db.Decimal(14, 2) @map("total_amount")
+  notes       String?
+  createdById String   @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  project      Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy    User                 @relation("ScheduleCreator", fields: [createdById], references: [id])
+  installments PaymentInstallment[]
+
+  @@map("payment_schedules")
+}
+
+model PaymentInstallment {
+  id             String            @id @default(uuid())
+  scheduleId     String            @map("schedule_id")
+  installmentNo  Int               @map("installment_no")
+  title          String?
+  amount         Decimal           @db.Decimal(14, 2)
+  dueDate        DateTime?         @map("due_date")
+  status         InstallmentStatus @default(PENDING)
+  paidAmount     Decimal           @default(0) @db.Decimal(14, 2) @map("paid_amount")
+  notes          String?
+  createdAt      DateTime          @default(now()) @map("created_at")
+  updatedAt      DateTime          @updatedAt @map("updated_at")
+
+  schedule PaymentSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  payments PaymentRecord[]
+
+  @@map("payment_installments")
+}
+
+model PaymentRecord {
+  id              String      @id @default(uuid())
+  installmentId   String      @map("installment_id")
+  amount          Decimal     @db.Decimal(14, 2)
+  paymentDate     DateTime    @map("payment_date")
+  paymentMode     PaymentMode @default(BANK_TRANSFER) @map("payment_mode")
+  referenceNumber String?     @map("reference_number")
+  notes           String?
+  recordedById    String      @map("recorded_by_id")
+  createdAt       DateTime    @default(now()) @map("created_at")
+
+  installment PaymentInstallment @relation(fields: [installmentId], references: [id], onDelete: Cascade)
+  recordedBy  User               @relation("PaymentRecorder", fields: [recordedById], references: [id])
+
+  @@map("payment_records")
 }

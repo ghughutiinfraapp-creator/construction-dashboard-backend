@@ -22,6 +22,7 @@ const foremanRoutes= require('./routes/foreman');
 const issueRoutes = require('./routes/issues');
 const suggestionRoutes = require('./routes/suggestions');
 const taskCategoryRoutes = require('./routes/taskCategories');
+const paymentScheduleRoutes = require('./routes/paymentSchedules');
 
 const { errorHandler } = require('./middleware/errorHandler');
 
@@ -79,6 +80,7 @@ app.use('/api/foreman',foremanRoutes);
 app.use('/api/issues', issueRoutes);
 app.use('/api/suggestions', suggestionRoutes);
 app.use('/api/task-categories', taskCategoryRoutes);
+app.use('/api/payment-schedules', paymentScheduleRoutes);
 
 
 // Health check
