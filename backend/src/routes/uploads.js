@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 const { authenticate } = require('../middleware/auth');
+const prisma = require('../config/database');
 
 const uploadDir = path.join(__dirname, '../../uploads');
 
@@ -31,6 +32,26 @@ function resolveDestination(req) {
   return { dir: path.join(uploadDir, subDir), urlPrefix: `/uploads/${subDir}` };
 }
 
+// Saves a Photo record to the DB if projectId + entityType are provided.
+// entityId, taskId, purchaseOrderId, deliveryId are optional but recommended.
+async function savePhotoRecord({ url, req }) {
+  const { projectId, entityType, entityId, taskId, purchaseOrderId, deliveryId, caption } = req.body;
+  if (!projectId || !entityType) return null;
+  return prisma.photo.create({
+    data: {
+      uploadedById:    req.user.id,
+      projectId,
+      entityType,
+      entityId:        entityId        || entityId || '',
+      taskId:          taskId          || null,
+      purchaseOrderId: purchaseOrderId || null,
+      deliveryId:      deliveryId      || null,
+      url,
+      caption:         caption         || null,
+    }
+  });
+}
+
 const storage = multer.diskStorage({
   destination: (req, _file, cb) => {
     const { dir } = resolveDestination(req);
@@ -54,29 +75,32 @@ const upload = multer({
 });
 
 // POST /api/uploads/photo
-// Task photo: ?projectName=Skyline%20Tower&taskTitle=Plastering&date=2026-05-24
-// Generic:    ?type=photos
+// Body (optional): { projectId, entityType, entityId, taskId, purchaseOrderId, deliveryId, caption }
 router.post('/photo', authenticate, upload.single('file'), async (req, res, next) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
     const { urlPrefix } = resolveDestination(req);
     const url = `${urlPrefix}/${req.file.filename}`;
-    res.json({ url, filename: req.file.filename, size: req.file.size });
+
+    const photo = await savePhotoRecord({ url, req });
+
+    res.json({ url, filename: req.file.filename, size: req.file.size, photo });
   } catch (error) { next(error); }
 });
 
 // POST /api/uploads/multiple
-// Task photos: ?projectName=Skyline%20Tower&taskTitle=Plastering&date=2026-05-24
-// Generic:     ?type=photos
+// Body (optional): { projectId, entityType, entityId, taskId, purchaseOrderId, deliveryId, caption }
 router.post('/multiple', authenticate, upload.array('files', 10), async (req, res, next) => {
   try {
     if (!req.files || req.files.length === 0) return res.status(400).json({ error: 'No files uploaded' });
     const { urlPrefix } = resolveDestination(req);
-    const files = req.files.map(f => ({
-      url: `${urlPrefix}/${f.filename}`,
-      filename: f.filename,
-      size: f.size
+
+    const files = await Promise.all(req.files.map(async (f) => {
+      const url   = `${urlPrefix}/${f.filename}`;
+      const photo = await savePhotoRecord({ url, req });
+      return { url, filename: f.filename, size: f.size, photo };
     }));
+
     res.json({ files });
   } catch (error) { next(error); }
 });
