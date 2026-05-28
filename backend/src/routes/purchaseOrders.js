@@ -293,4 +293,90 @@ router.put('/:id/assign-delivery', authenticate, authorize('FINANCE', 'PROJECT_M
   } catch (error) { next(error); }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ADD THIS ROUTE to your existing purchase-orders router
+// Place it BEFORE the `module.exports = router;` line
+// ─────────────────────────────────────────────────────────────────────────────
+
+// PUT /api/purchase-orders/:id  (Engineer edits their own PO)
+router.put('/:id', authenticate, authorize('SITE_ENGINEER', 'PROJECT_MANAGER', 'SUPER_ADMIN'), async (req, res, next) => {
+  try {
+    const { urgency, notes, items } = req.body;
+
+    // Fetch the existing PO to verify ownership
+    const existing = await prisma.purchaseOrder.findUnique({
+      where: { id: req.params.id },
+      include: { items: true },
+    });
+
+    if (!existing) {
+      return res.status(404).json({ error: 'Purchase order not found' });
+    }
+
+    // Only the creator (or admins) may edit
+    if (
+      req.user.role === 'SITE_ENGINEER' &&
+      existing.createdById !== req.user.id
+    ) {
+      return res.status(403).json({ error: 'You can only edit your own purchase orders' });
+    }
+
+    // Validate items array
+    if (!items || items.length === 0) {
+      return res.status(400).json({ error: 'At least one item is required' });
+    }
+
+    // Run everything in a transaction so items stay consistent
+    const updatedPO = await prisma.$transaction(async (tx) => {
+      // 1. Delete all existing items for this PO
+      await tx.pOItem.deleteMany({ where: { purchaseOrderId: req.params.id } });
+
+      // 2. Re-create items from the request body
+      // 3. Update the PO header fields
+      return tx.purchaseOrder.update({
+        where: { id: req.params.id },
+        data: {
+          urgency: urgency ?? existing.urgency,
+          notes:   notes   ?? existing.notes,
+          // If the PO was REJECTED, reset it to SUBMITTED so finance re-reviews
+          ...(existing.status === 'REJECTED' && { status: 'SUBMITTED', rejectionReason: null }),
+          items: {
+            create: items.map((item) => ({
+              itemName:     item.itemName,
+              itemCategory: item.itemCategory,
+              quantity:     item.quantity,
+              unit:         item.unit,
+              unitPrice:    item.unitPrice ? parseFloat(item.unitPrice) : null,
+              totalPrice:   item.unitPrice ? parseFloat(item.unitPrice) * item.quantity : null,
+              brand:        item.brand  ?? null,
+              notes:        item.notes  ?? null,
+            })),
+          },
+        },
+        include: {
+          items:   true,
+          project: { select: { id: true, name: true } },
+        },
+      });
+    });
+
+    // Notify finance only if the PO was REJECTED and is now re-submitted
+    if (existing.status === 'REJECTED') {
+      const notifier = new NotificationService(req.app.get('io'));
+      await notifier.sendToRole({
+        role:       'FINANCE',
+        title:      'Purchase Order Revised',
+        body:       `PO ${updatedPO.poNumber} was revised and resubmitted by ${req.user.name}`,
+        type:       'PO_SUBMITTED',
+        entityType: 'purchase_order',
+        entityId:   updatedPO.id,
+      });
+    }
+
+    res.json({ purchaseOrder: updatedPO });
+  } catch (error) {
+    next(error);
+  }
+});
+
 module.exports = router;
