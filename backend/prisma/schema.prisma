@@ -91,6 +91,9 @@ enum NotificationType {
 
 enum InstallmentStatus {
   PENDING
+  REQUESTED
+  APPROVED
+  REJECTED
   PARTIAL
   PAID
   OVERDUE
@@ -154,6 +157,7 @@ model User {
   suggestions       Suggestion[]
   paymentSchedules  PaymentSchedule[] @relation("ScheduleCreator")
   paymentRecords    PaymentRecord[]   @relation("PaymentRecorder")
+  requestedInstallments PaymentInstallment[] @relation("InstallmentRequester")
 
   @@map("users")
 }
@@ -252,6 +256,7 @@ model Task {
   createdBy  User          @relation("TaskCreator", fields: [createdById], references: [id])
   category   TaskCategory? @relation(fields: [categoryId], references: [id])
   photos     Photo[]
+  paymentInstallments PaymentInstallment[]
 
   @@map("tasks")
 }
@@ -556,6 +561,7 @@ model PaymentSchedule {
 model PaymentInstallment {
   id             String            @id @default(uuid())
   scheduleId     String            @map("schedule_id")
+  taskId         String?           @map("task_id")
   installmentNo  Int               @map("installment_no")
   title          String?
   amount         Decimal           @db.Decimal(14, 2)
@@ -563,11 +569,15 @@ model PaymentInstallment {
   status         InstallmentStatus @default(PENDING)
   paidAmount     Decimal           @default(0) @db.Decimal(14, 2) @map("paid_amount")
   notes          String?
+  requestedById  String?           @map("requested_by_id")
+  requestedAt    DateTime?         @map("requested_at")
   createdAt      DateTime          @default(now()) @map("created_at")
   updatedAt      DateTime          @updatedAt @map("updated_at")
 
-  schedule PaymentSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
-  payments PaymentRecord[]
+  schedule   PaymentSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  task       Task?           @relation(fields: [taskId], references: [id])
+  requestedBy User?          @relation("InstallmentRequester", fields: [requestedById], references: [id])
+  payments   PaymentRecord[]
 
   @@map("payment_installments")
 }

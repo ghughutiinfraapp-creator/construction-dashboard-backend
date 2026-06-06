@@ -4,10 +4,9 @@ const { authenticate, authorize } = require('../middleware/auth');
 const NotificationService = require('../services/notificationService');
 const multer = require('multer');
 const path = require('path');
-const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
+const { uploadBuffer } = require('../config/cloudinary');
 
-const TASK_UPLOAD_DIR = path.join(__dirname, '../../uploads/tasks');
 
 function slugify(str) {
   return str.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -26,22 +25,10 @@ async function attachTask(req, res, next) {
   } catch (err) { next(err); }
 }
 
-// Returns a configured multer instance that stores files under
-// uploads/tasks/{project-name}/{task-title}/completed/{YYYY-MM-DD}/
+// Returns a configured multer instance using memory storage
 function buildTaskUpload(task) {
-  const dir = path.join(
-    TASK_UPLOAD_DIR,
-    slugify(task.project.name),
-    slugify(task.title),
-    'completed',
-    new Date().toISOString().slice(0, 10)
-  );
-  fs.mkdirSync(dir, { recursive: true });
   return multer({
-    storage: multer.diskStorage({
-      destination: (_, __, cb) => cb(null, dir),
-      filename: (_, file, cb) => cb(null, `${uuidv4()}${path.extname(file.originalname)}`)
-    }),
+    storage: multer.memoryStorage(),
     limits: { fileSize: parseInt(process.env.MAX_FILE_SIZE) || 10 * 1024 * 1024 },
     fileFilter: (_, file, cb) => {
       if (/jpeg|jpg|png|webp/.test(path.extname(file.originalname).toLowerCase())) cb(null, true);
@@ -255,20 +242,28 @@ router.post('/:id/photos', authenticate, attachTask, (req, res, next) => {
       const projectSlug = slugify(req.task.project.name);
       const taskSlug = slugify(req.task.title);
       const date = new Date().toISOString().slice(0, 10);
+      const baseFolder = process.env.CLOUDINARY_FOLDER || 'construction-platform';
+      const folder = `${baseFolder}/tasks/${projectSlug}/${taskSlug}/completed/${date}`;
 
-      const photos = await Promise.all(req.files.map(file =>
-        prisma.photo.create({
+      const photos = await Promise.all(req.files.map(async (file) => {
+        const publicId = uuidv4();
+        const uploadResult = await uploadBuffer(file.buffer, {
+          folder,
+          public_id: publicId,
+        });
+
+        return prisma.photo.create({
           data: {
             uploadedById: req.user.id,
             projectId: req.task.project.id,
             taskId: req.task.id,
             entityType: 'task',
             entityId: req.task.id,
-            url: `/uploads/tasks/${projectSlug}/${taskSlug}/completed/${date}/${file.filename}`,
+            url: uploadResult.secure_url,
             caption: req.body.caption || null,
           }
-        })
-      ));
+        });
+      }));
 
       res.status(201).json({ photos });
     } catch (error) { next(error); }

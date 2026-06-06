@@ -4,17 +4,11 @@ const { authenticate, authorize } = require('../middleware/auth');
 const NotificationService = require('../services/notificationService');
 const multer = require('multer');
 const path = require('path');
-const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
-
-const uploadDir = path.join(__dirname, '../../uploads/issues');
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+const { uploadBuffer } = require('../config/cloudinary');
 
 const upload = multer({
-  storage: multer.diskStorage({
-    destination: (req, file, cb) => cb(null, uploadDir),
-    filename: (req, file, cb) => cb(null, `${uuidv4()}${path.extname(file.originalname)}`)
-  }),
+  storage: multer.memoryStorage(),
   limits: { fileSize: parseInt(process.env.MAX_FILE_SIZE) || 10 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     const allowed = /jpeg|jpg|png|gif|webp/;
@@ -28,7 +22,20 @@ router.post('/', authenticate, authorize('CLIENT'), upload.array('photos', 10), 
   try {
     const { projectId, title, description } = req.body;
     if (!projectId || !title) return res.status(400).json({ error: 'projectId and title are required' });
-    const photoUrls = (req.files || []).map(f => `/uploads/issues/${f.filename}`);
+    let photoUrls = [];
+    if (req.files && req.files.length > 0) {
+      const baseFolder = process.env.CLOUDINARY_FOLDER || 'construction-platform';
+      const folder = `${baseFolder}/issues`;
+      const uploadResults = await Promise.all(
+        req.files.map(file =>
+          uploadBuffer(file.buffer, {
+            folder,
+            public_id: uuidv4(),
+          })
+        )
+      );
+      photoUrls = uploadResults.map(r => r.secure_url);
+    }
 
     const project = await prisma.project.findUnique({
       where: { id: projectId },
@@ -131,7 +138,19 @@ router.put('/:id', authenticate, upload.array('photos', 10), async (req, res, ne
       const { title, description } = req.body;
       if (title) data.title = title;
       if (description !== undefined) data.description = description;
-      if (req.files?.length) data.photoUrls = req.files.map(f => `/uploads/issues/${f.filename}`);
+      if (req.files?.length) {
+        const baseFolder = process.env.CLOUDINARY_FOLDER || 'construction-platform';
+        const folder = `${baseFolder}/issues`;
+        const uploadResults = await Promise.all(
+          req.files.map(file =>
+            uploadBuffer(file.buffer, {
+              folder,
+              public_id: uuidv4(),
+            })
+          )
+        );
+        data.photoUrls = uploadResults.map(r => r.secure_url);
+      }
     } else {
       const { status } = req.body;
       if (status) data.status = status;
