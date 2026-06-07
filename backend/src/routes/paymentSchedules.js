@@ -9,6 +9,7 @@ const inr = (n) => parseFloat(n).toLocaleString('en-IN');
 // A PENDING/PARTIAL installment whose dueDate has passed is OVERDUE.
 function effectiveStatus(inst) {
   if (inst.status === 'PAID') return 'PAID';
+  if (['REQUESTED', 'APPROVED', 'REJECTED'].includes(inst.status)) return inst.status;
   if (inst.dueDate && new Date(inst.dueDate) < new Date()) return 'OVERDUE';
   return inst.status;
 }
@@ -53,13 +54,17 @@ router.post('/', authenticate, authorize('SUPER_ADMIN'), async (req, res, next) 
             amount:  parseFloat(inst.amount),
             dueDate: inst.dueDate ? new Date(inst.dueDate) : null,
             notes:   inst.notes   || null,
+            taskId:  inst.taskId  || null,
           }))
         }
       },
       include: {
         project:      { select: { id: true, name: true } },
         createdBy:    { select: { id: true, name: true } },
-        installments: { orderBy: { installmentNo: 'asc' } }
+        installments: { 
+          orderBy: { installmentNo: 'asc' },
+          include: { task: { select: { id: true, title: true } } }
+        }
       }
     });
 
@@ -95,7 +100,10 @@ router.get('/', authenticate, async (req, res, next) => {
         createdBy: { select: { id: true, name: true } },
         installments: {
           orderBy: { installmentNo: 'asc' },
-          include: { _count: { select: { payments: true } } }
+          include: { 
+            _count: { select: { payments: true } },
+            task: { select: { id: true, title: true } }
+          }
         }
       },
       orderBy: { createdAt: 'desc' }
@@ -122,6 +130,8 @@ router.get('/:id', authenticate, async (req, res, next) => {
         installments: {
           orderBy: { installmentNo: 'asc' },
           include: {
+            task: { select: { id: true, title: true } },
+            requestedBy: { select: { id: true, name: true } },
             payments: {
               include: { recordedBy: { select: { id: true, name: true } } },
               orderBy: { paymentDate: 'desc' }
@@ -148,7 +158,12 @@ router.put('/:id', authenticate, authorize('SUPER_ADMIN'), async (req, res, next
     const schedule = await prisma.paymentSchedule.update({
       where: { id: req.params.id },
       data,
-      include: { installments: { orderBy: { installmentNo: 'asc' } } }
+      include: { 
+        installments: { 
+          orderBy: { installmentNo: 'asc' },
+          include: { task: { select: { id: true, title: true } } }
+        } 
+      }
     });
     res.json({ schedule: { ...schedule, installments: enrichInstallments(schedule.installments) } });
   } catch (error) { next(error); }
@@ -158,7 +173,7 @@ router.put('/:id', authenticate, authorize('SUPER_ADMIN'), async (req, res, next
 // POST /api/payment-schedules/:id/installments
 router.post('/:id/installments', authenticate, authorize('SUPER_ADMIN'), async (req, res, next) => {
   try {
-    const { title, amount, dueDate, notes } = req.body;
+    const { title, amount, dueDate, notes, taskId } = req.body;
     if (!amount) return res.status(400).json({ error: 'amount is required' });
 
     const schedule = await prisma.paymentSchedule.findUnique({
@@ -179,6 +194,7 @@ router.post('/:id/installments', authenticate, authorize('SUPER_ADMIN'), async (
         amount:  parseFloat(amount),
         dueDate: dueDate ? new Date(dueDate) : null,
         notes:   notes   || null,
+        taskId:  taskId  || null,
       }
     });
     res.status(201).json({ installment: { ...installment, effectiveStatus: effectiveStatus(installment) } });
@@ -217,6 +233,97 @@ router.delete('/:id/installments/:iid', authenticate, authorize('SUPER_ADMIN'), 
 
     await prisma.paymentInstallment.delete({ where: { id: req.params.iid } });
     res.json({ message: 'Installment deleted' });
+  } catch (error) { next(error); }
+});
+
+// ─── REQUEST PAYMENT ──────────────────────────────────────────────────────────
+// POST /api/payment-schedules/:id/installments/:iid/request
+router.post('/:id/installments/:iid/request', authenticate, authorize('SUPER_ADMIN'), async (req, res, next) => {
+  try {
+    const inst = await prisma.paymentInstallment.findUnique({
+      where: { id: req.params.iid },
+      include: {
+        schedule: { include: { project: { select: { name: true, managerId: true, clientId: true } } } },
+        task: { select: { title: true } }
+      }
+    });
+    if (!inst) return res.status(404).json({ error: 'Installment not found' });
+    if (inst.status !== 'PENDING') return res.status(400).json({ error: 'Only PENDING installments can be requested' });
+
+    const updatedInst = await prisma.paymentInstallment.update({
+      where: { id: req.params.iid },
+      data: {
+        status: 'REQUESTED',
+        requestedById: req.user.id,
+        requestedAt: new Date()
+      }
+    });
+
+    const project = inst.schedule.project;
+    const taskTitle = inst.task ? ` (Task: ${inst.task.title})` : '';
+    
+    if (project.clientId) {
+      try {
+        const notifier = new NotificationService(req.app.get('io'));
+        await notifier.send({
+          userId: project.clientId,
+          title: 'Payment Requested',
+          body: `Payment of ₹${inr(inst.amount)} requested for ${project.name} - ${inst.title}${taskTitle}`,
+          type: 'PAYMENT_DUE',
+          entityType: 'payment_schedule',
+          entityId: req.params.id
+        });
+      } catch (_) {}
+    }
+
+    res.json({ message: 'Payment requested successfully', installment: { ...updatedInst, effectiveStatus: effectiveStatus(updatedInst) } });
+  } catch (error) { next(error); }
+});
+
+// ─── REVIEW PAYMENT REQUEST ───────────────────────────────────────────────────
+// POST /api/payment-schedules/:id/installments/:iid/review
+// Body: { action: 'APPROVE' | 'REJECT', notes?: string }
+router.post('/:id/installments/:iid/review', authenticate, authorize('SUPER_ADMIN'), async (req, res, next) => {
+  try {
+    const { action, notes } = req.body;
+    if (!['APPROVE', 'REJECT'].includes(action)) return res.status(400).json({ error: 'Action must be APPROVE or REJECT' });
+
+    const inst = await prisma.paymentInstallment.findUnique({
+      where: { id: req.params.iid },
+      include: {
+        schedule: { include: { project: { select: { name: true, managerId: true, clientId: true } } } },
+        task: { select: { title: true } }
+      }
+    });
+    if (!inst) return res.status(404).json({ error: 'Installment not found' });
+    if (inst.status !== 'REQUESTED') return res.status(400).json({ error: 'Only REQUESTED installments can be reviewed' });
+
+    const project = inst.schedule.project;
+
+    const newStatus = action === 'APPROVE' ? 'APPROVED' : 'REJECTED';
+    const updatedInst = await prisma.paymentInstallment.update({
+      where: { id: req.params.iid },
+      data: {
+        status: newStatus,
+        notes: notes ? `${inst.notes ? inst.notes + '\n' : ''}Review Notes: ${notes}` : inst.notes
+      }
+    });
+
+    if (project.managerId) {
+      try {
+        const notifier = new NotificationService(req.app.get('io'));
+        await notifier.send({
+          userId: project.managerId,
+          title: `Payment Request ${action === 'APPROVE' ? 'Approved' : 'Rejected'}`,
+          body: `Payment request for ${project.name} - ${inst.title} was ${newStatus.toLowerCase()}.`,
+          type: 'PAYMENT_DUE',
+          entityType: 'payment_schedule',
+          entityId: req.params.id
+        });
+      } catch (_) {}
+    }
+
+    res.json({ message: `Payment request ${newStatus.toLowerCase()}`, installment: { ...updatedInst, effectiveStatus: effectiveStatus(updatedInst) } });
   } catch (error) { next(error); }
 });
 
@@ -313,7 +420,7 @@ router.get('/:id/summary', authenticate, async (req, res, next) => {
     for (const i of schedule.installments) {
       const amt  = parseFloat(i.amount);
       const paid = parseFloat(i.paidAmount);
-      const es   = i.status === 'PAID' ? 'PAID' : (i.dueDate && new Date(i.dueDate) < now ? 'OVERDUE' : i.status);
+      const es   = effectiveStatus(i);
       totalPaid += paid;
       if (es === 'PAID')    { countPaid++; }
       else if (es === 'OVERDUE') { totalOverdue += amt - paid; countOverdue++; }

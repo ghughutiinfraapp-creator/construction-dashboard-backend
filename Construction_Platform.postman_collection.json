@@ -5,7 +5,7 @@
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    { "key": "base_url",     "value": "http://localhost:5000/api", "type": "string" },
+    { "key": "base_url",     "value": "https://construction-api-nhef.onrender.com/api", "type": "string" },
     { "key": "token",        "value": "",                          "type": "string" },
     { "key": "project_id",   "value": "e2fa773e-e038-4bcc-b999-52907046cab6", "type": "string" },
     { "key": "project_id_2", "value": "3498b8d3-b18b-497d-b9b1-d2b139b3c6c8", "type": "string" }
@@ -212,6 +212,18 @@
             "body": { "mode": "raw", "raw": "{\n  \"geofenceLat\": 28.5355,\n  \"geofenceLng\": 77.3910,\n  \"geofenceRadius\": 400\n}" },
             "url": { "raw": "{{base_url}}/projects/{{project_id}}/geofence", "host": ["{{base_url}}"], "path": ["projects","{{project_id}}","geofence"] }
           }
+        },
+        {
+          "name": "Get Project Photos",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/projects/{{project_id}}/photos",
+              "host": ["{{base_url}}"], "path": ["projects","{{project_id}}","photos"],
+              "query": [{ "key": "entityType", "value": "task", "disabled": true }]
+            }
+          }
         }
       ]
     },
@@ -294,6 +306,29 @@
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
             "url": { "raw": "{{base_url}}/tasks/<task_id>/subtasks", "host": ["{{base_url}}"], "path": ["tasks","<task_id>","subtasks"] }
+          }
+        },
+        {
+          "name": "Upload Task Completion Photos",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "photos", "type": "file", "src": "" },
+                { "key": "caption", "value": "Task completion evidence", "type": "text" }
+              ]
+            },
+            "url": { "raw": "{{base_url}}/tasks/<task_id>/photos", "host": ["{{base_url}}"], "path": ["tasks","<task_id>","photos"] }
+          }
+        },
+        {
+          "name": "Get Task Photos",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/tasks/<task_id>/photos", "host": ["{{base_url}}"], "path": ["tasks","<task_id>","photos"] }
           }
         },
         {
@@ -399,6 +434,177 @@
     },
 
     {
+      "name": "Purchase Orders",
+      "item": [
+        {
+          "name": "Get All POs",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/purchase-orders?projectId={{project_id}}", "host": ["{{base_url}}"], "path": ["purchase-orders"], "query": [{ "key": "projectId", "value": "{{project_id}}" }] }
+          }
+        },
+        {
+          "name": "Create PO",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"projectId\": \"{{project_id}}\",\n  \"urgency\": \"NORMAL\",\n  \"notes\": \"Required for ground floor work\",\n  \"items\": [\n    {\n      \"itemName\": \"OPC Cement 53 Grade\",\n      \"itemCategory\": \"Cement\",\n      \"quantity\": 50,\n      \"unit\": \"Bag\",\n      \"unitPrice\": 380,\n      \"brand\": \"UltraTech\"\n    }\n  ]\n}" },
+            "url": { "raw": "{{base_url}}/purchase-orders", "host": ["{{base_url}}"], "path": ["purchase-orders"] }
+          }
+        },
+        {
+          "name": "Get PO By ID",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/purchase-orders/<po_id>", "host": ["{{base_url}}"], "path": ["purchase-orders","<po_id>"] }
+          }
+        },
+        {
+          "name": "Approve PO",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/purchase-orders/<po_id>/approve", "host": ["{{base_url}}"], "path": ["purchase-orders","<po_id>","approve"] }
+          }
+        },
+        {
+          "name": "Reject PO",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"rejectionReason\": \"Budget exceeded for this month\"\n}" },
+            "url": { "raw": "{{base_url}}/purchase-orders/<po_id>/reject", "host": ["{{base_url}}"], "path": ["purchase-orders","<po_id>","reject"] }
+          }
+        },
+        {
+          "name": "Assign Vendor",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"vendorId\": \"<vendor_id>\"\n}" },
+            "url": { "raw": "{{base_url}}/purchase-orders/<po_id>/assign-vendor", "host": ["{{base_url}}"], "path": ["purchase-orders","<po_id>","assign-vendor"] }
+          }
+        },
+        {
+          "name": "Assign Delivery Person",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"deliveryPersonId\": \"<delivery_user_id>\",\n  \"pickupAddress\": \"Vendor warehouse address\",\n  \"dropAddress\": \"Site address\"\n}" },
+            "url": { "raw": "{{base_url}}/purchase-orders/<po_id>/assign-delivery", "host": ["{{base_url}}"], "path": ["purchase-orders","<po_id>","assign-delivery"] }
+          }
+        },
+        {
+          "name": "Transfer Materials to Another Project",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"targetProjectId\": \"{{project_id_2}}\",\n  \"items\": [\n    { \"itemId\": \"<po_item_id>\", \"quantity\": 10 }\n  ],\n  \"notes\": \"Surplus cement transferred from Site A\"\n}"
+            },
+            "url": { "raw": "{{base_url}}/purchase-orders/<po_id>/transfer-materials", "host": ["{{base_url}}"], "path": ["purchase-orders","<po_id>","transfer-materials"] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Payment Schedules",
+      "item": [
+        {
+          "name": "Create Payment Schedule",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"projectId\": \"{{project_id}}\",\n  \"totalAmount\": 7500000,\n  \"notes\": \"ABC Project — 75 Lakh payment plan\",\n  \"installments\": [\n    { \"title\": \"Foundation Complete\",  \"amount\": 2000000, \"dueDate\": \"2026-07-01\" },\n    { \"title\": \"First Floor Complete\", \"amount\": 2500000, \"dueDate\": \"2026-10-01\" },\n    { \"title\": \"Final Handover\",       \"amount\": 3000000, \"dueDate\": \"2027-01-01\" }\n  ]\n}"
+            },
+            "url": { "raw": "{{base_url}}/payment-schedules", "host": ["{{base_url}}"], "path": ["payment-schedules"] }
+          }
+        },
+        {
+          "name": "Get Payment Schedules (by project)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/payment-schedules?projectId={{project_id}}",
+              "host": ["{{base_url}}"], "path": ["payment-schedules"],
+              "query": [{ "key": "projectId", "value": "{{project_id}}" }]
+            }
+          }
+        },
+        {
+          "name": "Get Payment Schedule By ID",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/payment-schedules/<schedule_id>", "host": ["{{base_url}}"], "path": ["payment-schedules","<schedule_id>"] }
+          }
+        },
+        {
+          "name": "Update Schedule (notes / totalAmount)",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"notes\": \"Revised payment plan after scope change\"\n}" },
+            "url": { "raw": "{{base_url}}/payment-schedules/<schedule_id>", "host": ["{{base_url}}"], "path": ["payment-schedules","<schedule_id>"] }
+          }
+        },
+        {
+          "name": "Add Installment",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"Extra Work Installment\",\n  \"amount\": 500000,\n  \"dueDate\": \"2027-03-01\",\n  \"notes\": \"Added after scope revision\"\n}" },
+            "url": { "raw": "{{base_url}}/payment-schedules/<schedule_id>/installments", "host": ["{{base_url}}"], "path": ["payment-schedules","<schedule_id>","installments"] }
+          }
+        },
+        {
+          "name": "Update Installment",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"Foundation Complete (Revised)\",\n  \"dueDate\": \"2026-08-01\"\n}" },
+            "url": { "raw": "{{base_url}}/payment-schedules/<schedule_id>/installments/<installment_id>", "host": ["{{base_url}}"], "path": ["payment-schedules","<schedule_id>","installments","<installment_id>"] }
+          }
+        },
+        {
+          "name": "Delete Installment (PENDING only)",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/payment-schedules/<schedule_id>/installments/<installment_id>", "host": ["{{base_url}}"], "path": ["payment-schedules","<schedule_id>","installments","<installment_id>"] }
+          }
+        },
+        {
+          "name": "Record Payment",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 2000000,\n  \"paymentDate\": \"2026-07-05\",\n  \"paymentMode\": \"BANK_TRANSFER\",\n  \"referenceNumber\": \"TXN20260705ABC\",\n  \"notes\": \"Foundation milestone payment received\"\n}"
+            },
+            "url": { "raw": "{{base_url}}/payment-schedules/<schedule_id>/installments/<installment_id>/pay", "host": ["{{base_url}}"], "path": ["payment-schedules","<schedule_id>","installments","<installment_id>","pay"] }
+          }
+        },
+        {
+          "name": "Get Schedule Summary",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/payment-schedules/<schedule_id>/summary", "host": ["{{base_url}}"], "path": ["payment-schedules","<schedule_id>","summary"] }
+          }
+        }
+      ]
+    },
+
+    {
       "name": "Attendance",
       "item": [
         {
@@ -489,72 +695,6 @@
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
             "url": { "raw": "{{base_url}}/labour/wage-report?projectId={{project_id}}", "host": ["{{base_url}}"], "path": ["labour","wage-report"], "query": [{ "key": "projectId", "value": "{{project_id}}" }] }
-          }
-        }
-      ]
-    },
-
-    {
-      "name": "Purchase Orders",
-      "item": [
-        {
-          "name": "Get All POs",
-          "request": {
-            "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-            "url": { "raw": "{{base_url}}/purchase-orders?projectId={{project_id}}", "host": ["{{base_url}}"], "path": ["purchase-orders"], "query": [{ "key": "projectId", "value": "{{project_id}}" }] }
-          }
-        },
-        {
-          "name": "Create PO",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
-            "body": { "mode": "raw", "raw": "{\n  \"projectId\": \"{{project_id}}\",\n  \"urgency\": \"NORMAL\",\n  \"notes\": \"Required for ground floor work\",\n  \"items\": [\n    {\n      \"itemName\": \"OPC Cement 53 Grade\",\n      \"itemCategory\": \"Cement\",\n      \"quantity\": 50,\n      \"unit\": \"Bag\",\n      \"unitPrice\": 380,\n      \"totalPrice\": 19000,\n      \"brand\": \"UltraTech\"\n    }\n  ]\n}" },
-            "url": { "raw": "{{base_url}}/purchase-orders", "host": ["{{base_url}}"], "path": ["purchase-orders"] }
-          }
-        },
-        {
-          "name": "Get PO By ID",
-          "request": {
-            "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-            "url": { "raw": "{{base_url}}/purchase-orders/<po_id>", "host": ["{{base_url}}"], "path": ["purchase-orders","<po_id>"] }
-          }
-        },
-        {
-          "name": "Approve PO",
-          "request": {
-            "method": "PUT",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-            "url": { "raw": "{{base_url}}/purchase-orders/<po_id>/approve", "host": ["{{base_url}}"], "path": ["purchase-orders","<po_id>","approve"] }
-          }
-        },
-        {
-          "name": "Reject PO",
-          "request": {
-            "method": "PUT",
-            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
-            "body": { "mode": "raw", "raw": "{\n  \"rejectionReason\": \"Budget exceeded for this month\"\n}" },
-            "url": { "raw": "{{base_url}}/purchase-orders/<po_id>/reject", "host": ["{{base_url}}"], "path": ["purchase-orders","<po_id>","reject"] }
-          }
-        },
-        {
-          "name": "Assign Vendor",
-          "request": {
-            "method": "PUT",
-            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
-            "body": { "mode": "raw", "raw": "{\n  \"vendorId\": \"<vendor_id>\"\n}" },
-            "url": { "raw": "{{base_url}}/purchase-orders/<po_id>/assign-vendor", "host": ["{{base_url}}"], "path": ["purchase-orders","<po_id>","assign-vendor"] }
-          }
-        },
-        {
-          "name": "Assign Delivery Person",
-          "request": {
-            "method": "PUT",
-            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
-            "body": { "mode": "raw", "raw": "{\n  \"deliveryPersonId\": \"<delivery_user_id>\",\n  \"pickupAddress\": \"Vendor warehouse address\",\n  \"dropAddress\": \"Site address\"\n}" },
-            "url": { "raw": "{{base_url}}/purchase-orders/<po_id>/assign-delivery", "host": ["{{base_url}}"], "path": ["purchase-orders","<po_id>","assign-delivery"] }
           }
         }
       ]
@@ -698,6 +838,102 @@
             "method": "DELETE",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
             "url": { "raw": "{{base_url}}/materials/catalog/<material_id>", "host": ["{{base_url}}"], "path": ["materials","catalog","<material_id>"] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Uploads",
+      "item": [
+        {
+          "name": "Upload Single Photo (generic)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "file",        "type": "file", "src": "" },
+                { "key": "projectId",   "value": "{{project_id}}", "type": "text" },
+                { "key": "entityType",  "value": "task",           "type": "text" },
+                { "key": "entityId",    "value": "<task_id>",      "type": "text" },
+                { "key": "taskId",      "value": "<task_id>",      "type": "text" },
+                { "key": "caption",     "value": "Site progress",  "type": "text" }
+              ]
+            },
+            "url": { "raw": "{{base_url}}/uploads/photo", "host": ["{{base_url}}"], "path": ["uploads","photo"] }
+          }
+        },
+        {
+          "name": "Upload Daily Task Photo",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "file",       "type": "file", "src": "" },
+                { "key": "projectId",  "value": "{{project_id}}",  "type": "text" },
+                { "key": "entityType", "value": "task",             "type": "text" },
+                { "key": "entityId",   "value": "<task_id>",        "type": "text" },
+                { "key": "taskId",     "value": "<task_id>",        "type": "text" },
+                { "key": "caption",    "value": "Daily progress",   "type": "text" }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/uploads/photo?projectName=ABC%20Project&taskTitle=Plastering&photoType=daily",
+              "host": ["{{base_url}}"], "path": ["uploads","photo"],
+              "query": [
+                { "key": "projectName", "value": "ABC%20Project" },
+                { "key": "taskTitle",   "value": "Plastering" },
+                { "key": "photoType",   "value": "daily" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Upload Multiple Photos (generic)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "files",      "type": "file", "src": "" },
+                { "key": "projectId",  "value": "{{project_id}}", "type": "text" },
+                { "key": "entityType", "value": "task",           "type": "text" },
+                { "key": "entityId",   "value": "<task_id>",      "type": "text" },
+                { "key": "taskId",     "value": "<task_id>",      "type": "text" }
+              ]
+            },
+            "url": { "raw": "{{base_url}}/uploads/multiple", "host": ["{{base_url}}"], "path": ["uploads","multiple"] }
+          }
+        },
+        {
+          "name": "Upload Multiple Daily Task Photos",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "files",      "type": "file", "src": "" },
+                { "key": "projectId",  "value": "{{project_id}}",  "type": "text" },
+                { "key": "entityType", "value": "task",             "type": "text" },
+                { "key": "entityId",   "value": "<task_id>",        "type": "text" },
+                { "key": "taskId",     "value": "<task_id>",        "type": "text" }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/uploads/multiple?projectName=ABC%20Project&taskTitle=Plastering&photoType=daily",
+              "host": ["{{base_url}}"], "path": ["uploads","multiple"],
+              "query": [
+                { "key": "projectName", "value": "ABC%20Project" },
+                { "key": "taskTitle",   "value": "Plastering" },
+                { "key": "photoType",   "value": "daily" }
+              ]
+            }
           }
         }
       ]
@@ -926,47 +1162,6 @@
             "method": "DELETE",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
             "url": { "raw": "{{base_url}}/suggestions/<suggestion_id>", "host": ["{{base_url}}"], "path": ["suggestions","<suggestion_id>"] }
-          }
-        }
-      ]
-    },
-
-    {
-      "name": "Uploads",
-      "item": [
-        {
-          "name": "Upload Single Photo",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-            "body": {
-              "mode": "formdata",
-              "formdata": [
-                { "key": "photo",      "type": "file", "src": "" },
-                { "key": "projectId",  "value": "{{project_id}}", "type": "text" },
-                { "key": "entityType", "value": "task",           "type": "text" },
-                { "key": "entityId",   "value": "<task_id>",      "type": "text" },
-                { "key": "caption",    "value": "Site progress",  "type": "text" }
-              ]
-            },
-            "url": { "raw": "{{base_url}}/uploads/photo", "host": ["{{base_url}}"], "path": ["uploads","photo"] }
-          }
-        },
-        {
-          "name": "Upload Multiple Photos",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-            "body": {
-              "mode": "formdata",
-              "formdata": [
-                { "key": "photos",     "type": "file", "src": "" },
-                { "key": "projectId",  "value": "{{project_id}}", "type": "text" },
-                { "key": "entityType", "value": "task",           "type": "text" },
-                { "key": "entityId",   "value": "<task_id>",      "type": "text" }
-              ]
-            },
-            "url": { "raw": "{{base_url}}/uploads/multiple", "host": ["{{base_url}}"], "path": ["uploads","multiple"] }
           }
         }
       ]

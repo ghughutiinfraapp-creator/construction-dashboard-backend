@@ -1,35 +1,29 @@
 const router = require('express').Router();
 const multer = require('multer');
 const path = require('path');
-const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 const { authenticate } = require('../middleware/auth');
 const prisma = require('../config/database');
-
-const uploadDir = path.join(__dirname, '../../uploads');
-
-// Ensure base directories exist
-['photos', 'selfies', 'documents', 'tasks'].forEach(dir => {
-  fs.mkdirSync(path.join(uploadDir, dir), { recursive: true });
-});
+const { uploadBuffer } = require('../config/cloudinary');
 
 function slugify(str) {
   return str.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
 
-// Returns { dir, urlPrefix } based on query params.
+// Returns the folder path on Cloudinary based on query params.
 // Task uploads: ?projectName=X&taskTitle=Y&photoType=daily|completed[&date=YYYY-MM-DD]
 // Generic uploads: ?type=photos|selfies|documents  (default: photos)
-function resolveDestination(req) {
+function resolveCloudinaryFolder(req) {
   const { projectName, taskTitle, photoType, date } = req.query;
+  const baseFolder = process.env.CLOUDINARY_FOLDER || 'construction-platform';
+  
   if (projectName && taskTitle) {
     const type = photoType === 'completed' ? 'completed' : 'daily';
     const day  = date || new Date().toISOString().slice(0, 10);
-    const rel  = `tasks/${slugify(projectName)}/${slugify(taskTitle)}/${type}/${day}`;
-    return { dir: path.join(uploadDir, rel), urlPrefix: `/uploads/${rel}` };
+    return `${baseFolder}/tasks/${slugify(projectName)}/${slugify(taskTitle)}/${type}/${day}`;
   }
   const subDir = req.query.type || 'photos';
-  return { dir: path.join(uploadDir, subDir), urlPrefix: `/uploads/${subDir}` };
+  return `${baseFolder}/${subDir}`;
 }
 
 // Saves a Photo record to the DB if projectId + entityType are provided.
@@ -42,7 +36,7 @@ async function savePhotoRecord({ url, req }) {
       uploadedById:    req.user.id,
       projectId,
       entityType,
-      entityId:        entityId        || entityId || '',
+      entityId:        entityId        || '',
       taskId:          taskId          || null,
       purchaseOrderId: purchaseOrderId || null,
       deliveryId:      deliveryId      || null,
@@ -52,16 +46,7 @@ async function savePhotoRecord({ url, req }) {
   });
 }
 
-const storage = multer.diskStorage({
-  destination: (req, _file, cb) => {
-    const { dir } = resolveDestination(req);
-    fs.mkdirSync(dir, { recursive: true });
-    cb(null, dir);
-  },
-  filename: (_req, file, cb) => {
-    cb(null, `${uuidv4()}${path.extname(file.originalname)}`);
-  }
-});
+const storage = multer.memoryStorage();
 
 const upload = multer({
   storage,
@@ -79,12 +64,23 @@ const upload = multer({
 router.post('/photo', authenticate, upload.single('file'), async (req, res, next) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-    const { urlPrefix } = resolveDestination(req);
-    const url = `${urlPrefix}/${req.file.filename}`;
+    const folder = resolveCloudinaryFolder(req);
+    const filename = uuidv4();
 
+    const uploadResult = await uploadBuffer(req.file.buffer, {
+      folder,
+      public_id: filename,
+    });
+
+    const url = uploadResult.secure_url;
     const photo = await savePhotoRecord({ url, req });
 
-    res.json({ url, filename: req.file.filename, size: req.file.size, photo });
+    res.json({ 
+      url, 
+      filename: `${filename}${path.extname(req.file.originalname)}`, 
+      size: req.file.size, 
+      photo 
+    });
   } catch (error) { next(error); }
 });
 
@@ -93,12 +89,22 @@ router.post('/photo', authenticate, upload.single('file'), async (req, res, next
 router.post('/multiple', authenticate, upload.array('files', 10), async (req, res, next) => {
   try {
     if (!req.files || req.files.length === 0) return res.status(400).json({ error: 'No files uploaded' });
-    const { urlPrefix } = resolveDestination(req);
+    const folder = resolveCloudinaryFolder(req);
 
     const files = await Promise.all(req.files.map(async (f) => {
-      const url   = `${urlPrefix}/${f.filename}`;
+      const filename = uuidv4();
+      const uploadResult = await uploadBuffer(f.buffer, {
+        folder,
+        public_id: filename,
+      });
+      const url = uploadResult.secure_url;
       const photo = await savePhotoRecord({ url, req });
-      return { url, filename: f.filename, size: f.size, photo };
+      return { 
+        url, 
+        filename: `${filename}${path.extname(f.originalname)}`, 
+        size: f.size, 
+        photo 
+      };
     }));
 
     res.json({ files });
