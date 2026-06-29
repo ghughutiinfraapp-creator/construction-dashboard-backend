@@ -43,12 +43,13 @@ const DONE_STATUSES = ['COMPLETED', 'VERIFIED'];
 // GET /api/tasks
 router.get('/', authenticate, async (req, res, next) => {
   try {
-    const { projectId, status, assignedToId, page = 1, limit = 20 } = req.query;
+    const { projectId, status, assignedToId,priority, page = 1, limit = 20 } = req.query;
 
     const where = { parentId: null }; // top-level tasks only
     if (projectId) where.projectId = projectId;
     if (status) where.status = status;
     if (assignedToId) where.assignedToId = assignedToId;
+    if (priority) where.priority = priority;
     if (req.user.role === 'SITE_ENGINEER') where.assignedToId = req.user.id;
 
     const [tasks, total] = await Promise.all([
