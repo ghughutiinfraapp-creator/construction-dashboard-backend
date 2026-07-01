@@ -1168,6 +1168,41 @@
     },
 
     {
+      "name": "Photos",
+      "item": [
+        {
+          "name": "Get All Photos",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/photos?projectId={{project_id}}&page=1&limit=20",
+              "host": ["{{base_url}}"], "path": ["photos"],
+              "query": [
+                { "key": "projectId",      "value": "{{project_id}}" },
+                { "key": "entityType",     "value": "task",          "disabled": true },
+                { "key": "taskId",         "value": "<task_id>",     "disabled": true },
+                { "key": "purchaseOrderId","value": "<po_id>",       "disabled": true },
+                { "key": "deliveryId",     "value": "<delivery_id>", "disabled": true },
+                { "key": "uploadedById",   "value": "<user_id>",     "disabled": true },
+                { "key": "page",           "value": "1" },
+                { "key": "limit",          "value": "20" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Photo By ID",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/photos/<photo_id>", "host": ["{{base_url}}"], "path": ["photos","<photo_id>"] }
+          }
+        }
+      ]
+    },
+
+    {
       "name": "Health",
       "item": [
         {
