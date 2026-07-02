@@ -16,7 +16,26 @@ router.get('/', authenticate, async (req, res, next) => {
       prisma.notification.count({ where }),
       prisma.notification.count({ where: { userId: req.user.id, isRead: false } })
     ]);
-    res.json({ notifications, total, unreadCount, page: parseInt(page) });
+
+    const issueIds = notifications
+      .filter(n => n.entityType === 'issue' && n.entityId)
+      .map(n => n.entityId);
+
+    let issuePhotosById = {};
+    if (issueIds.length > 0) {
+      const issues = await prisma.issue.findMany({
+        where: { id: { in: issueIds } },
+        select: { id: true, photoUrls: true }
+      });
+      issuePhotosById = Object.fromEntries(issues.map(i => [i.id, i.photoUrls]));
+    }
+
+    const notificationsWithPhoto = notifications.map(n => ({
+      ...n,
+      photoUrls: n.entityType === 'issue' ? (issuePhotosById[n.entityId] || []) : undefined
+    }));
+
+    res.json({ notifications: notificationsWithPhoto, total, unreadCount, page: parseInt(page) });
   } catch (error) { next(error); }
 });
 
