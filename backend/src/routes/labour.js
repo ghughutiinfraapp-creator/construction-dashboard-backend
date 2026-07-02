@@ -20,7 +20,7 @@ router.get('/labourers', authenticate, async (req, res, next) => {
 });
 
 // POST /api/labour/labourers
-router.post('/labourers', authenticate, authorize('SITE_ENGINEER', 'PROJECT_MANAGER', 'SUPER_ADMIN'), async (req, res, next) => {
+router.post('/labourers', authenticate, authorize('SITE_ENGINEER', 'PROJECT_MANAGER', 'SUPER_ADMIN','FOREMAN'), async (req, res, next) => {
   try {
     const { name, phone, aadhaar, tradeType, dailyWage, projectId } = req.body;
     const labourer = await prisma.labourer.create({
@@ -101,6 +101,56 @@ router.get('/wage-report', authenticate, async (req, res, next) => {
 
     res.json({ report: Object.values(wageMap), totalLabourCost: Object.values(wageMap).reduce((s, w) => s + w.totalWage, 0) });
   } catch (error) { next(error); }
+});
+router.post('/sites/:id/labour', authenticate, authorize('FOREMAN'), async (req, res, next) => {
+  try {
+    const siteId = req.params.id;
+    const { labourCount, pricePerLabour, date, notes, workerIds } = req.body;
+
+    const count = parseInt(labourCount);
+    if (!Array.isArray(workerIds) || workerIds.length !== count) {
+      return res.status(400).json({
+        message: `Expected ${count} worker id(s) but received ${workerIds?.length ?? 0}.`,
+      });
+    }
+
+    const totalCost = count * parseFloat(pricePerLabour);
+
+    const entry = await prisma.labourEntry.create({
+      data: {
+        projectId: siteId,
+        labourCount: count,
+        pricePerLabour: parseFloat(pricePerLabour),
+        totalCost,
+        date: new Date(date),
+        notes: notes || null,
+        createdById: req.user.id,
+        workers: {
+          create: workerIds.map((labourerId) => ({ labourerId })),
+        },
+      },
+      include: {
+        workers: { include: { labourer: true } },
+        createdBy: { select: { id: true, name: true } },
+        project: { select: { id: true, name: true } },
+      },
+    });
+
+    // Flatten workers -> the shape the frontend LabourEntry.workers expects
+    res.status(201).json({
+      entry: {
+        ...entry,
+        workers: entry.workers.map((w) => ({
+          id: w.labourer.id,
+          name: w.labourer.name,
+          tradeType: w.labourer.tradeType,
+          phone: w.labourer.phone,
+        })),
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
 });
 
 module.exports = router;
