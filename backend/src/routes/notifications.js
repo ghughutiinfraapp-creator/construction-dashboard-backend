@@ -21,6 +21,10 @@ router.get('/', authenticate, async (req, res, next) => {
       .filter(n => n.entityType === 'issue' && n.entityId)
       .map(n => n.entityId);
 
+    const deliveryIds = notifications
+      .filter(n => n.entityType === 'delivery' && n.entityId)
+      .map(n => n.entityId);
+
     let issuePhotosById = {};
     if (issueIds.length > 0) {
       const issues = await prisma.issue.findMany({
@@ -30,9 +34,25 @@ router.get('/', authenticate, async (req, res, next) => {
       issuePhotosById = Object.fromEntries(issues.map(i => [i.id, i.photoUrls]));
     }
 
+    let deliveryPhotosById = {};
+    if (deliveryIds.length > 0) {
+      const photos = await prisma.photo.findMany({
+        where: { deliveryId: { in: deliveryIds } },
+        orderBy: { capturedAt: 'desc' },
+        select: { deliveryId: true, url: true }
+      });
+      deliveryPhotosById = photos.reduce((acc, p) => {
+        (acc[p.deliveryId] ||= []).push(p.url);
+        return acc;
+      }, {});
+    }
+
     const notificationsWithPhoto = notifications.map(n => ({
       ...n,
-      photoUrls: n.entityType === 'issue' ? (issuePhotosById[n.entityId] || []) : undefined
+      photoUrls:
+        n.entityType === 'issue'    ? (issuePhotosById[n.entityId] || []) :
+        n.entityType === 'delivery' ? (deliveryPhotosById[n.entityId] || []) :
+        undefined
     }));
 
     res.json({ notifications: notificationsWithPhoto, total, unreadCount, page: parseInt(page) });

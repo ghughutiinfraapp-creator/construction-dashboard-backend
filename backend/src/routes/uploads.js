@@ -1,5 +1,5 @@
 /**
- * uploads.js — FIXED
+ * uploads.js — FIXED + delivery photo notifications
  *
  * Key fixes vs original:
  *   1. savePhotoRecord now logs a warning when projectId/entityType are missing
@@ -10,6 +10,9 @@
  *      explicitly from req.params so it works even if body fields are missing.
  *   4. Cloudinary folder resolution unchanged — slug logic kept identical to
  *      frontend so URL-based photo matching continues to work.
+ *   5. NEW: POST /api/uploads/photo now creates a notification for the PO
+ *      creator (site engineer/admin) whenever a delivery-linked photo is
+ *      uploaded — per-item photo submits AND the final delivery-proof photo.
  */
 
 const router  = require('express').Router();
@@ -93,6 +96,50 @@ async function savePhotoRecord({ url, req, overrides = {} }) {
   });
 }
 
+// ── Notify site engineer/admin when a delivery-linked photo is uploaded ────
+// Fires for both per-item photo submits (req.body.itemId/itemName present)
+// and the final overall delivery-proof photo (no itemId). Fails silently
+// (logs only) so a notification error never blocks the photo upload itself.
+async function notifyDeliveryPhotoUploaded({ photo, req }) {
+  if (!photo?.deliveryId) return;
+
+  const delivery = await prisma.delivery.findUnique({
+    where: { id: photo.deliveryId },
+    include: {
+      purchaseOrder: {
+        include: {
+          project:   { select: { id: true, name: true } },
+          createdBy: { select: { id: true, name: true } },
+        },
+      },
+    },
+  });
+
+  const recipient = delivery?.purchaseOrder?.createdBy;
+  if (!recipient) return; // no one to notify
+
+  const siteName   = delivery.purchaseOrder.project?.name || 'the site';
+  const personName = req.user.name || 'A delivery person';
+  const itemName   = req.body?.itemName;
+
+  const title = itemName ? `Item delivered: ${itemName}` : 'Delivery photo submitted';
+  const body  = itemName
+    ? `${personName} delivered "${itemName}" at ${siteName}.`
+    : `Delivery done at ${siteName} by ${personName}.`;
+
+  await prisma.notification.create({
+    data: {
+      userId:     recipient.id,
+      type:       'DELIVERY_COMPLETED',
+      title,
+      body,
+      entityType: 'delivery',
+      entityId:   delivery.id,
+      isRead:     false,
+    },
+  });
+}
+
 // ── Multer config ──────────────────────────────────────────────────────────
 const storage = multer.memoryStorage();
 
@@ -142,6 +189,15 @@ router.post(
 
       const url   = uploadResult.secure_url;
       const photo = await savePhotoRecord({ url, req });
+
+      // Fire-and-forget: notify the PO creator (site engineer/admin) if this
+      // photo is tied to a delivery. Never let a notification failure block
+      // the upload response.
+      if (photo) {
+        notifyDeliveryPhotoUploaded({ photo, req }).catch(err =>
+          console.error('[uploads] Failed to create delivery notification:', err)
+        );
+      }
 
       // Return a 207 (partial success) if the file was saved to Cloudinary
       // but the DB record could not be created. This lets the mobile client
