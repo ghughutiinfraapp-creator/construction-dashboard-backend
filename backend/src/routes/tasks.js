@@ -96,7 +96,7 @@ async function resolveTitle(title, categoryId) {
 // Pass a `subtasks` array to create the parent and all its subtasks in one call.
 router.post('/', authenticate, authorize('SUPER_ADMIN', 'PROJECT_MANAGER'), async (req, res, next) => {
   try {
-    const { description, assignedToId, priority, startDate, dueDate, categoryId, parentId, subtasks = [] } = req.body;
+    const { description, assignedToId, priority, startDate, dueDate, categoryId, parentId, remark, subtasks = [] } = req.body;
     let { title, projectId } = req.body;
 
     // Resolve parent when creating a subtask
@@ -130,6 +130,7 @@ router.post('/', authenticate, authorize('SUPER_ADMIN', 'PROJECT_MANAGER'), asyn
         startDate: startDate ? new Date(startDate) : null,
         dueDate: dueDate ? new Date(dueDate) : null,
         categoryId: categoryId || null,
+        remark: remark || null,
       },
       include: {
         assignedTo: { select: { id: true, name: true, avatar: true } },
@@ -180,6 +181,7 @@ router.post('/', authenticate, authorize('SUPER_ADMIN', 'PROJECT_MANAGER'), asyn
               startDate: sub.startDate ? new Date(sub.startDate) : null,
               dueDate: sub.dueDate ? new Date(sub.dueDate) : null,
               categoryId: sub.categoryId || null,
+              remark: sub.remark || null,
             },
             include: {
               assignedTo: { select: { id: true, name: true, avatar: true } },
@@ -344,7 +346,7 @@ router.put('/:id/status', authenticate, async (req, res, next) => {
 // PUT /api/tasks/:id  (generic update — must come AFTER specific sub-routes)
 router.put('/:id', authenticate, authorize('SUPER_ADMIN', 'PROJECT_MANAGER'), async (req, res, next) => {
   try {
-    const { title, description, assignedToId, priority, startDate, dueDate, categoryId } = req.body;
+    const { title, description, assignedToId, priority, startDate, dueDate, categoryId, remark } = req.body;
     const data = {};
     if (title !== undefined) data.title = title;
     if (description !== undefined) data.description = description;
@@ -353,6 +355,7 @@ router.put('/:id', authenticate, authorize('SUPER_ADMIN', 'PROJECT_MANAGER'), as
     if (startDate !== undefined) data.startDate = startDate ? new Date(startDate) : null;
     if (dueDate !== undefined) data.dueDate = dueDate ? new Date(dueDate) : null;
     if (categoryId !== undefined) data.categoryId = categoryId || null;
+    if (remark !== undefined) data.remark = remark || null;
 
     const task = await prisma.task.update({
       where: { id: req.params.id },

@@ -247,6 +247,7 @@ model Task {
   updatedAt    DateTime     @updatedAt @map("updated_at")
   parentId     String?      @map("parent_id")
   categoryId   String?      @map("category_id")
+  remark       String?
   parent       Task?        @relation("SubTasks", fields: [parentId], references: [id], onDelete: Cascade)
   subtasks     Task[]       @relation("SubTasks")
 
