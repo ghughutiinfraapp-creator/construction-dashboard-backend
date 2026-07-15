@@ -9,27 +9,44 @@ router.get('/', authenticate, async (req, res, next) => {
     let where = {};
 
     // Role-based filtering
+    // NOTE: SITE_ENGINEER is intentionally NOT filtered to assigned-only projects
+    // anymore — engineers can see & punch into ANY site. We still tell the
+    // frontend which sites are "theirs" so they can be sorted to the top.
     if (req.user.role === 'CLIENT') where.clientId = req.user.id;
-    else if (req.user.role === 'SITE_ENGINEER') where.tasks = { some: { assignedToId: req.user.id } };
     else if (req.user.role === 'PROJECT_MANAGER') where.managerId = req.user.id;
     else if (req.user.role === 'FOREMAN') where.foremanId = req.user.id;
     if (status) where.status = status;
     if (search) where.name = { contains: search, mode: 'insensitive' };
 
-    const [projects, total] = await Promise.all([ 
+    const [projects, total] = await Promise.all([
       prisma.project.findMany({
         where, skip: (page - 1) * limit, take: parseInt(limit),
         include: {
           manager: { select: { id: true, name: true, avatar: true } },
           client: { select: { id: true, name: true } },
           foreman: { select: { id: true, name: true, avatar: true } },
-          _count: { select: { tasks: true, purchaseOrders: true, attendance: true } }
+          _count: { select: { tasks: true, purchaseOrders: true, attendance: true } },
+          // For engineers, pull just enough to know if THEY have a task here
+          ...(req.user.role === 'SITE_ENGINEER'
+            ? { tasks: { where: { assignedToId: req.user.id }, select: { id: true }, take: 1 } }
+            : {}),
         },
         orderBy: { updatedAt: 'desc' }
       }),
       prisma.project.count({ where })
     ]);
-    res.json({ projects, total, page: parseInt(page), totalPages: Math.ceil(total / limit) });
+
+    let result = projects;
+
+    if (req.user.role === 'SITE_ENGINEER') {
+      // Mark assigned sites, then move them to the top (stable sort keeps
+      // the original updatedAt ordering within each group).
+      result = projects
+        .map(({ tasks, ...p }) => ({ ...p, isAssigned: Array.isArray(tasks) && tasks.length > 0 }))
+        .sort((a, b) => Number(b.isAssigned) - Number(a.isAssigned));
+    }
+
+    res.json({ projects: result, total, page: parseInt(page), totalPages: Math.ceil(total / limit) });
   } catch (error) { next(error); }
 });
 
@@ -87,9 +104,6 @@ router.put('/:id', authenticate, authorize('SUPER_ADMIN', 'PROJECT_MANAGER'), as
   } catch (error) { next(error); }
 });
 
-
-
-
 // PUT /api/projects/:id/assign-foreman
 router.put('/:id/assign-foreman', authenticate, authorize('PROJECT_MANAGER', 'SUPER_ADMIN'), async (req, res, next) => {
   try {
@@ -125,7 +139,6 @@ router.put('/:id/geofence', authenticate, authorize('SUPER_ADMIN', 'PROJECT_MANA
 });
 
 // GET /api/projects/:id/photos
-// Optional filter: ?entityType=task|purchase_order|delivery
 router.get('/:id/photos', authenticate, async (req, res, next) => {
   try {
     const where = { projectId: req.params.id };
