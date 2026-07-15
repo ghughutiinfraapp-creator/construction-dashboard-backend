@@ -287,16 +287,17 @@ model Attendance {
 
 // ─── LABOURERS ──────────────────────────────────────────────────────
 model Labourer {
-  id        String   @id @default(uuid())
-  name      String
-  phone     String?
-  aadhaar   String?
-  tradeType String   @map("trade_type")
-  dailyWage Decimal  @db.Decimal(8, 2) @map("daily_wage")
-  projectId String   @map("project_id")
-  isActive  Boolean  @default(true) @map("is_active")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id             String   @id @default(uuid())
+  name           String
+  phone          String?
+  aadhaar        String?
+  tradeType      String   @map("trade_type")
+  proposedAmount Decimal  @db.Decimal(10, 2) @map("proposed_amount")
+  amountPaid     Decimal  @default(0) @db.Decimal(10, 2) @map("amount_paid")
+  projectId      String   @map("project_id")
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
 
   // Relations
   project    Project            @relation(fields: [projectId], references: [id])

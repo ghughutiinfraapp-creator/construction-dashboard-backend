@@ -87,13 +87,13 @@ async function main() {
 
   // ─── LABOURERS ──────────────────────────────────────────────────
   const labourers = await Promise.all([
-    prisma.labourer.create({ data: { name: 'Ram Prasad', phone: '9888800001', tradeType: 'Mason', dailyWage: 800, projectId: project1.id } }),
-    prisma.labourer.create({ data: { name: 'Shyam Kumar', phone: '9888800002', tradeType: 'Helper', dailyWage: 500, projectId: project1.id } }),
-    prisma.labourer.create({ data: { name: 'Mohan Lal', phone: '9888800003', tradeType: 'Electrician', dailyWage: 900, projectId: project1.id } }),
-    prisma.labourer.create({ data: { name: 'Gopal Das', phone: '9888800004', tradeType: 'Plumber', dailyWage: 850, projectId: project1.id } }),
-    prisma.labourer.create({ data: { name: 'Dinesh Yadav', phone: '9888800005', tradeType: 'Mason', dailyWage: 800, projectId: project1.id } }),
-    prisma.labourer.create({ data: { name: 'Sunil Chauhan', phone: '9888800006', tradeType: 'Helper', dailyWage: 500, projectId: project2.id } }),
-    prisma.labourer.create({ data: { name: 'Anil Gupta', phone: '9888800007', tradeType: 'Carpenter', dailyWage: 900, projectId: project2.id } }),
+    prisma.labourer.create({ data: { name: 'Ram Prasad', phone: '9888800001', tradeType: 'Mason', proposedAmount: 24000, amountPaid: 16000, projectId: project1.id } }),
+    prisma.labourer.create({ data: { name: 'Shyam Kumar', phone: '9888800002', tradeType: 'Helper', proposedAmount: 15000, amountPaid: 10000, projectId: project1.id } }),
+    prisma.labourer.create({ data: { name: 'Mohan Lal', phone: '9888800003', tradeType: 'Electrician', proposedAmount: 27000, amountPaid: 18000, projectId: project1.id } }),
+    prisma.labourer.create({ data: { name: 'Gopal Das', phone: '9888800004', tradeType: 'Plumber', proposedAmount: 25500, amountPaid: 17000, projectId: project1.id } }),
+    prisma.labourer.create({ data: { name: 'Dinesh Yadav', phone: '9888800005', tradeType: 'Mason', proposedAmount: 24000, amountPaid: 16000, projectId: project1.id } }),
+    prisma.labourer.create({ data: { name: 'Sunil Chauhan', phone: '9888800006', tradeType: 'Helper', proposedAmount: 15000, amountPaid: 9000, projectId: project2.id } }),
+    prisma.labourer.create({ data: { name: 'Anil Gupta', phone: '9888800007', tradeType: 'Carpenter', proposedAmount: 27000, amountPaid: 15000, projectId: project2.id } }),
   ]);
 
   console.log('✅ Labourers created');

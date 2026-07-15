@@ -80,18 +80,24 @@ router.get('/recent-activity', authenticate, async (req, res, next) => {
     const [recentPOs, recentTasks, recentAttendance] = await Promise.all([
       prisma.purchaseOrder.findMany({
         take: 5, orderBy: { updatedAt: 'desc' },
-        select: { id: true, poNumber: true, status: true, urgency: true, totalAmount: true, updatedAt: true,
-          createdBy: { select: { name: true } }, project: { select: { name: true } } }
+        select: {
+          id: true, poNumber: true, status: true, urgency: true, totalAmount: true, updatedAt: true,
+          createdBy: { select: { name: true } }, project: { select: { name: true } }
+        }
       }),
       prisma.task.findMany({
         take: 5, orderBy: { updatedAt: 'desc' },
-        select: { id: true, title: true, status: true, priority: true, updatedAt: true,
-          assignedTo: { select: { name: true } }, project: { select: { name: true } } }
+        select: {
+          id: true, title: true, status: true, priority: true, updatedAt: true,
+          assignedTo: { select: { name: true } }, project: { select: { name: true } }
+        }
       }),
       prisma.attendance.findMany({
         take: 5, orderBy: { punchInTime: 'desc' },
-        select: { id: true, punchInTime: true, punchOutTime: true, totalHours: true,
-          user: { select: { name: true } }, project: { select: { name: true } } }
+        select: {
+          id: true, punchInTime: true, punchOutTime: true, totalHours: true,
+          user: { select: { name: true } }, project: { select: { name: true } }
+        }
       })
     ]);
 
@@ -103,23 +109,22 @@ router.get('/recent-activity', authenticate, async (req, res, next) => {
 router.get('/project-summary/:id', authenticate, async (req, res, next) => {
   try {
     const projectId = req.params.id;
-    const today = new Date(); today.setHours(0, 0, 0, 0);
 
-    const [project, taskStats, todayLabour, poStats] = await Promise.all([
+    const [project, taskStats, labourAmountPaid, poStats] = await Promise.all([
       prisma.project.findUnique({
         where: { id: projectId },
         include: { manager: { select: { name: true } }, client: { select: { name: true } } }
       }),
       prisma.task.groupBy({ by: ['status'], where: { projectId }, _count: { id: true } }),
-      prisma.labourAttendance.count({ where: { projectId, date: today, status: { in: ['PRESENT', 'HALF_DAY'] } } }),
+      prisma.labourer.aggregate({ where: { projectId }, _sum: { amountPaid: true } }),
       prisma.purchaseOrder.aggregate({
-        where: { projectId, status: { in: ['CLOSED', 'VERIFIED'] } },
+        where: { projectId, status: { in: ['READY_FOR_PICKUP', 'VERIFIED', 'CLOSED'] } },
         _sum: { totalAmount: true }, _count: { id: true }
       })
     ]);
 
     res.json({
-      project, taskStats, todayLabourCount: todayLabour,
+      project, taskStats, totalLabourAmountPaid: labourAmountPaid._sum.amountPaid || 0,
       totalPOSpend: poStats._sum.totalAmount || 0, completedPOs: poStats._count.id
     });
   } catch (error) { next(error); }

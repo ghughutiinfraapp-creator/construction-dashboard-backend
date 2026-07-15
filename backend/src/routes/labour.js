@@ -22,9 +22,13 @@ router.get('/labourers', authenticate, async (req, res, next) => {
 // POST /api/labour/labourers
 router.post('/labourers', authenticate, authorize('SITE_ENGINEER', 'PROJECT_MANAGER', 'SUPER_ADMIN','FOREMAN'), async (req, res, next) => {
   try {
-    const { name, phone, aadhaar, tradeType, dailyWage, projectId } = req.body;
+    const { name, phone, aadhaar, tradeType, proposedAmount, amountPaid, projectId } = req.body;
     const labourer = await prisma.labourer.create({
-      data: { name, phone, aadhaar, tradeType, dailyWage: parseFloat(dailyWage), projectId }
+      data: {
+        name, phone, aadhaar, tradeType, projectId,
+        proposedAmount: parseFloat(proposedAmount),
+        amountPaid: amountPaid !== undefined ? parseFloat(amountPaid) : 0
+      }
     });
     res.status(201).json({ labourer });
   } catch (error) { next(error); }
@@ -67,7 +71,7 @@ router.get('/attendance', authenticate, async (req, res, next) => {
     const records = await prisma.labourAttendance.findMany({
       where,
       include: {
-        labourer: { select: { id: true, name: true, tradeType: true, dailyWage: true } },
+        labourer: { select: { id: true, name: true, tradeType: true, proposedAmount: true, amountPaid: true } },
         markedBy: { select: { id: true, name: true } }
       },
       orderBy: { date: 'desc' }
@@ -80,26 +84,36 @@ router.get('/attendance', authenticate, async (req, res, next) => {
 router.get('/wage-report', authenticate, async (req, res, next) => {
   try {
     const { projectId, startDate, endDate } = req.query;
-    const where = { status: 'PRESENT' };
-    if (projectId) where.projectId = projectId;
+    const where = {};
+    if (projectId) {
+      where.projectId = projectId;
+      where.labourer = { projectId };
+    }
     if (startDate && endDate) where.date = { gte: new Date(startDate), lte: new Date(endDate) };
 
     const records = await prisma.labourAttendance.findMany({
       where: { ...where, OR: [{ status: 'PRESENT' }, { status: 'HALF_DAY' }] },
-      include: { labourer: { select: { id: true, name: true, tradeType: true, dailyWage: true } } }
+      include: { labourer: { select: { id: true, name: true, tradeType: true, proposedAmount: true, amountPaid: true } } }
     });
 
-    // Calculate wages
+    // Calculate attendance summary per labourer
     const wageMap = {};
     records.forEach(r => {
       if (!wageMap[r.labourerId]) {
-        wageMap[r.labourerId] = { ...r.labourer, daysPresent: 0, halfDays: 0, totalWage: 0 };
+        const proposedAmount = parseFloat(r.labourer.proposedAmount);
+        const amountPaid = parseFloat(r.labourer.amountPaid);
+        wageMap[r.labourerId] = {
+          ...r.labourer,
+          proposedAmount, amountPaid,
+          pendingAmount: proposedAmount - amountPaid,
+          daysPresent: 0, halfDays: 0
+        };
       }
-      if (r.status === 'PRESENT') { wageMap[r.labourerId].daysPresent++; wageMap[r.labourerId].totalWage += parseFloat(r.labourer.dailyWage); }
-      if (r.status === 'HALF_DAY') { wageMap[r.labourerId].halfDays++; wageMap[r.labourerId].totalWage += parseFloat(r.labourer.dailyWage) / 2; }
+      if (r.status === 'PRESENT') wageMap[r.labourerId].daysPresent++;
+      if (r.status === 'HALF_DAY') wageMap[r.labourerId].halfDays++;
     });
 
-    res.json({ report: Object.values(wageMap), totalLabourCost: Object.values(wageMap).reduce((s, w) => s + w.totalWage, 0) });
+    res.json({ report: Object.values(wageMap) });
   } catch (error) { next(error); }
 });
 router.post('/sites/:id/labour', authenticate, authorize('FOREMAN'), async (req, res, next) => {
