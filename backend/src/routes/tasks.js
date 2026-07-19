@@ -344,9 +344,11 @@ router.put('/:id/status', authenticate, async (req, res, next) => {
 });
 
 // PUT /api/tasks/:id  (generic update — must come AFTER specific sub-routes)
+// Pass a `subtasks` array to sync child tasks: entries with an `id` update that
+// existing subtask, entries without one are created as new subtasks.
 router.put('/:id', authenticate, authorize('SUPER_ADMIN', 'PROJECT_MANAGER'), async (req, res, next) => {
   try {
-    const { title, description, assignedToId, priority, startDate, dueDate, categoryId, remark } = req.body;
+    const { title, description, assignedToId, priority, startDate, dueDate, categoryId, remark, subtasks } = req.body;
     const data = {};
     if (title !== undefined) data.title = title;
     if (description !== undefined) data.description = description;
@@ -366,7 +368,59 @@ router.put('/:id', authenticate, authorize('SUPER_ADMIN', 'PROJECT_MANAGER'), as
         category: { select: { id: true, name: true } },
       },
     });
-    res.json({ task });
+
+    if (Array.isArray(subtasks)) {
+      const resolved = await Promise.all(
+        subtasks.map(async (sub) => ({
+          ...sub,
+          title: await resolveTitle(sub.title, sub.categoryId),
+        }))
+      );
+
+      const invalid = resolved.find(s => !s.id && !s.title);
+      if (invalid) return res.status(400).json({ error: 'Each subtask must have a title or a valid categoryId' });
+
+      await Promise.all(resolved.map(sub => {
+        const subData = {};
+        if (sub.title !== undefined) subData.title = sub.title;
+        if (sub.description !== undefined) subData.description = sub.description || null;
+        if (sub.assignedToId !== undefined) subData.assignedToId = sub.assignedToId || null;
+        if (sub.priority !== undefined) subData.priority = sub.priority || 'MEDIUM';
+        if (sub.startDate !== undefined) subData.startDate = sub.startDate ? new Date(sub.startDate) : null;
+        if (sub.dueDate !== undefined) subData.dueDate = sub.dueDate ? new Date(sub.dueDate) : null;
+        if (sub.categoryId !== undefined) subData.categoryId = sub.categoryId || null;
+        if (sub.remark !== undefined) subData.remark = sub.remark || null;
+
+        return sub.id
+          ? prisma.task.update({ where: { id: sub.id }, data: subData })
+          : prisma.task.create({
+              data: {
+                projectId: task.projectId,
+                parentId: task.id,
+                title: sub.title,
+                description: sub.description || null,
+                assignedToId: sub.assignedToId || null,
+                priority: sub.priority || 'MEDIUM',
+                createdById: req.user.id,
+                startDate: sub.startDate ? new Date(sub.startDate) : null,
+                dueDate: sub.dueDate ? new Date(sub.dueDate) : null,
+                categoryId: sub.categoryId || null,
+                remark: sub.remark || null,
+              },
+            });
+      }));
+    }
+
+    const updatedSubtasks = await prisma.task.findMany({
+      where: { parentId: task.id },
+      include: {
+        assignedTo: { select: { id: true, name: true, avatar: true } },
+        category: { select: { id: true, name: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    res.json({ task: { ...task, subtasks: updatedSubtasks } });
   } catch (error) { next(error); }
 });
 
