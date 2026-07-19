@@ -238,7 +238,7 @@ router.delete('/labour/:entryId', authenticate, authorize('FOREMAN'), async (req
  * GET /api/foreman/sites/:siteId/labour/summary
  * Returns aggregated labour cost summary for a site.
  */
-router.get('/sites/:siteId/labour/summary', authenticate, authorize('FOREMAN', 'PROJECT_MANAGER', 'ADMIN'), async (req, res, next) => {
+router.get('/sites/:siteId/labour/summary', authenticate, authorize('FOREMAN', 'PROJECT_MANAGER', 'SUPER_ADMIN', 'SUPER_ADMIN_VIEW'), async (req, res, next) => {
   try {
     const { siteId } = req.params;
 

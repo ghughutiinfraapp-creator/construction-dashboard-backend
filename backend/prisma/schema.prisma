@@ -11,6 +11,7 @@ datasource db {
 // ─── ENUMS ──────────────────────────────────────────────────────────
 enum Role {
   SUPER_ADMIN
+  SUPER_ADMIN_VIEW
   PROJECT_MANAGER
   SITE_ENGINEER
   FINANCE
@@ -54,6 +55,7 @@ enum POStatus {
   APPROVED
   VENDOR_ASSIGNED
   READY_FOR_PICKUP
+  PARTIALLY_DELIVERED
   DELIVERED
   VERIFIED
   CLOSED
@@ -69,6 +71,7 @@ enum POUrgency {
 enum DeliveryStatus {
   ASSIGNED
   PICKED_UP
+  PARTIALLY_DELIVERED
   DELIVERED
   VERIFIED
   ISSUE_RAISED
@@ -399,6 +402,7 @@ model POItem {
   brand           String?
   notes           String?
   transferredQty  Float    @default(0) @map("transferred_qty")
+  receivedQty     Float    @default(0) @map("received_qty")
 
   // Relations
   purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)

@@ -6,10 +6,10 @@ const { authenticate, authorize } = require('../middleware/auth');
 // Returns phase-level categories with their children.
 // ?search=  — filters phases whose name matches OR that have a matching child item.
 //             Matched child items are returned under their parent phase.
-// ?all=true  — SUPER_ADMIN only, includes hidden entries.
+// ?all=true  — SUPER_ADMIN / SUPER_ADMIN_VIEW only, includes hidden entries.
 router.get('/', authenticate, async (req, res, next) => {
   try {
-    const showAll   = req.user.role === 'SUPER_ADMIN' && req.query.all === 'true';
+    const showAll   = ['SUPER_ADMIN', 'SUPER_ADMIN_VIEW'].includes(req.user.role) && req.query.all === 'true';
     const search    = req.query.search?.trim();
     const visFilter = showAll ? {} : { isVisible: true };
 
@@ -55,7 +55,7 @@ router.get('/', authenticate, async (req, res, next) => {
 // ?search= filters by item name OR parent phase name (both directions).
 router.get('/flat', authenticate, async (req, res, next) => {
   try {
-    const showAll   = req.user.role === 'SUPER_ADMIN' && req.query.all === 'true';
+    const showAll   = ['SUPER_ADMIN', 'SUPER_ADMIN_VIEW'].includes(req.user.role) && req.query.all === 'true';
     const search    = req.query.search?.trim();
     const visFilter = showAll ? {} : { isVisible: true };
 

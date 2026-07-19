@@ -16,7 +16,7 @@ router.get('/by-role/:role', authenticate, async (req, res, next) => {
 });
 
 // GET /api/users
-router.get('/', authenticate, authorize('SUPER_ADMIN', 'PROJECT_MANAGER'), async (req, res, next) => {
+router.get('/', authenticate, authorize('SUPER_ADMIN', 'SUPER_ADMIN_VIEW', 'PROJECT_MANAGER'), async (req, res, next) => {
   try {
     const { role, search, isActive, page = 1, limit = 20 } = req.query;
     const where = {};

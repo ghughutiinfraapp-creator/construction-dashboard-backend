@@ -13,7 +13,9 @@ router.get('/', authenticate, async (req, res, next) => {
     if (status) where.status = status;
     if (createdById) where.createdById = createdById;
     if (req.user.role === 'SITE_ENGINEER') where.createdById = req.user.id;
-    if (req.user.role === 'DELIVERY_PERSON') where.delivery = { deliveryPersonId: req.user.id };
+    if (req.user.role === 'DELIVERY_PERSON') {
+      where.OR = [{ createdById: req.user.id }, { delivery: { deliveryPersonId: req.user.id } }];
+    }
 
     const [orders, total] = await Promise.all([
       prisma.purchaseOrder.findMany({
@@ -35,8 +37,8 @@ router.get('/', authenticate, async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-// POST /api/purchase-orders (Site Engineer creates PO)
-router.post('/', authenticate, authorize('SITE_ENGINEER', 'PROJECT_MANAGER'), async (req, res, next) => {
+// POST /api/purchase-orders (Site Engineer / Delivery Person creates PO)
+router.post('/', authenticate, authorize('SITE_ENGINEER', 'PROJECT_MANAGER', 'DELIVERY_PERSON'), async (req, res, next) => {
   try {
     const { projectId, urgency, notes, items } = req.body;
     const poNumber = await generatePONumber();
@@ -298,8 +300,8 @@ router.put('/:id/assign-delivery', authenticate, authorize('FINANCE', 'PROJECT_M
 // Place it BEFORE the `module.exports = router;` line
 // ─────────────────────────────────────────────────────────────────────────────
 
-// PUT /api/purchase-orders/:id  (Engineer edits their own PO)
-router.put('/:id', authenticate, authorize('SITE_ENGINEER', 'PROJECT_MANAGER', 'SUPER_ADMIN'), async (req, res, next) => {
+// PUT /api/purchase-orders/:id  (creator edits their own PO)
+router.put('/:id', authenticate, authorize('SITE_ENGINEER', 'DELIVERY_PERSON', 'PROJECT_MANAGER', 'SUPER_ADMIN'), async (req, res, next) => {
   try {
     const { urgency, notes, items } = req.body;
 
@@ -315,7 +317,7 @@ router.put('/:id', authenticate, authorize('SITE_ENGINEER', 'PROJECT_MANAGER', '
 
     // Only the creator (or admins) may edit
     if (
-      req.user.role === 'SITE_ENGINEER' &&
+      ['SITE_ENGINEER', 'DELIVERY_PERSON'].includes(req.user.role) &&
       existing.createdById !== req.user.id
     ) {
       return res.status(403).json({ error: 'You can only edit your own purchase orders' });

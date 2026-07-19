@@ -10,7 +10,7 @@ router.get('/catalog', authenticate, async (req, res, next) => {
     const where = {};
 
     // Only admins can see inactive items
-    if (includeInactive === 'true' && ['SUPER_ADMIN', 'PROJECT_MANAGER'].includes(req.user.role)) {
+    if (includeInactive === 'true' && ['SUPER_ADMIN', 'SUPER_ADMIN_VIEW', 'PROJECT_MANAGER'].includes(req.user.role)) {
       // no isActive filter — return all
     } else {
       where.isActive = true;
