@@ -63,11 +63,55 @@ router.get('/:id', authenticate, async (req, res, next) => {
           take: 10, orderBy: { createdAt: 'desc' },
           select: { id: true, poNumber: true, status: true, totalAmount: true, createdAt: true }
         },
-        _count: { select: { purchaseOrders: true } }
+        payments: {
+          take: 10, orderBy: { paymentDate: 'desc' },
+          include: { recordedBy: { select: { id: true, name: true } } }
+        },
+        _count: { select: { purchaseOrders: true, payments: true } }
       }
     });
     if (!vendor) return res.status(404).json({ error: 'Vendor not found' });
     res.json({ vendor });
+  } catch (error) { next(error); }
+});
+
+// GET /api/vendors/:id/payments
+router.get('/:id/payments', authenticate, async (req, res, next) => {
+  try {
+    const payments = await prisma.vendorPayment.findMany({
+      where: { vendorId: req.params.id },
+      orderBy: { paymentDate: 'desc' },
+      include: { recordedBy: { select: { id: true, name: true } } }
+    });
+    res.json({ payments });
+  } catch (error) { next(error); }
+});
+
+// POST /api/vendors/:id/payments — record a payment sent to the vendor
+router.post('/:id/payments', authenticate, authorize('FINANCE', 'SUPER_ADMIN'), async (req, res, next) => {
+  try {
+    const { amount, paymentDate, paymentMode, receiptNumber, notes } = req.body;
+
+    const parsedAmount = parseFloat(amount);
+    if (isNaN(parsedAmount)) return res.status(400).json({ error: 'amount must be a valid number' });
+
+    const vendor = await prisma.vendor.findUnique({ where: { id: req.params.id } });
+    if (!vendor) return res.status(404).json({ error: 'Vendor not found' });
+
+    const payment = await prisma.vendorPayment.create({
+      data: {
+        vendorId: req.params.id,
+        amount: parsedAmount,
+        paymentDate: paymentDate ? new Date(paymentDate) : new Date(),
+        paymentMode: paymentMode || 'BANK_TRANSFER',
+        receiptNumber: receiptNumber || null,
+        notes: notes || null,
+        recordedById: req.user.id,
+      },
+      include: { recordedBy: { select: { id: true, name: true } } }
+    });
+
+    res.status(201).json({ payment });
   } catch (error) { next(error); }
 });
 

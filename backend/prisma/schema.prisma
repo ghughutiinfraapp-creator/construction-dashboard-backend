@@ -158,6 +158,7 @@ model User {
   paymentSchedules  PaymentSchedule[] @relation("ScheduleCreator")
   paymentRecords    PaymentRecord[]   @relation("PaymentRecorder")
   requestedInstallments PaymentInstallment[] @relation("InstallmentRequester")
+  vendorPayments    VendorPayment[]   @relation("VendorPaymentRecorder")
 
   @@map("users")
 }
@@ -339,12 +340,17 @@ model Vendor {
   paymentTerms String?  @map("payment_terms")
   credit       Decimal  @default(0) @db.Decimal(12, 2)
   paid         Decimal  @default(0) @db.Decimal(12, 2)
+  bankName          String? @map("bank_name")
+  accountNumber     String? @map("account_number")
+  ifscCode          String? @map("ifsc_code")
+  accountHolderName String? @map("account_holder_name")
   isActive     Boolean  @default(true) @map("is_active")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
   // Relations
   purchaseOrders PurchaseOrder[]
+  payments       VendorPayment[]
 
   @@map("vendors")
 }
@@ -601,4 +607,22 @@ model PaymentRecord {
   recordedBy  User               @relation("PaymentRecorder", fields: [recordedById], references: [id])
 
   @@map("payment_records")
+}
+
+// Tracks each payment sent to a vendor against advance/credit material purchases.
+model VendorPayment {
+  id              String      @id @default(uuid())
+  vendorId        String      @map("vendor_id")
+  amount          Decimal     @db.Decimal(12, 2)
+  paymentDate     DateTime    @default(now()) @map("payment_date")
+  paymentMode     PaymentMode @default(BANK_TRANSFER) @map("payment_mode")
+  receiptNumber   String?     @map("receipt_number")
+  notes           String?
+  recordedById    String      @map("recorded_by_id")
+  createdAt       DateTime    @default(now()) @map("created_at")
+
+  vendor     Vendor @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  recordedBy User   @relation("VendorPaymentRecorder", fields: [recordedById], references: [id])
+
+  @@map("vendor_payments")
 }
