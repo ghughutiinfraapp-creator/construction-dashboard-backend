@@ -25,7 +25,7 @@ router.post('/mobile/register', async (req, res, next) => {
   try {
     const { name, email, phone, password, role } = req.body;
 
-    const allowedRoles = ['SITE_ENGINEER', 'DELIVERY_PERSON', 'CLIENT'];
+    const allowedRoles = ['SITE_ENGINEER', 'JUNIOR_ENGINEER', 'DELIVERY_PERSON', 'CLIENT'];
 
     if (!allowedRoles.includes(role)) {
       return res.status(400).json({ error: 'Invalid role selected' });

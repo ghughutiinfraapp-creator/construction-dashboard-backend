@@ -52,6 +52,20 @@ router.get('/', authenticate, async (req, res, next) => {
     if (priority) where.priority = priority;
     if (req.user.role === 'SITE_ENGINEER') where.assignedToId = req.user.id;
 
+    // Junior Engineer is a supporting field role — sees every task on any
+    // project they've attended (via Attendance), not just tasks assigned to them.
+    if (req.user.role === 'JUNIOR_ENGINEER') {
+      const attended = await prisma.attendance.findMany({
+        where: { userId: req.user.id },
+        select: { projectId: true },
+        distinct: ['projectId'],
+      });
+      const allowedProjectIds = attended.map(a => a.projectId);
+      where.projectId = (where.projectId && allowedProjectIds.includes(where.projectId))
+        ? where.projectId
+        : (where.projectId ? { in: [] } : { in: allowedProjectIds });
+    }
+
     const [tasks, total] = await Promise.all([
       prisma.task.findMany({
         where,
@@ -288,6 +302,11 @@ router.get('/:id/photos', authenticate, async (req, res, next) => {
 // PUT /api/tasks/:id/status
 router.put('/:id/status', authenticate, async (req, res, next) => {
   try {
+    // Junior Engineer is view + photo-upload only — no status changes.
+    if (req.user.role === 'JUNIOR_ENGINEER') {
+      return res.status(403).json({ error: 'Junior Engineers cannot update task status.' });
+    }
+
     const { status } = req.body;
     if (!status) return res.status(400).json({ error: 'status is required' });
 

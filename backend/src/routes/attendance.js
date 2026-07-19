@@ -5,7 +5,7 @@ const { isWithinGeofence } = require('../utils/geofence');
 const NotificationService = require('../services/notificationService');
 
 // POST /api/attendance/punch-in
-router.post('/punch-in', authenticate, authorize('SITE_ENGINEER'), async (req, res, next) => {
+router.post('/punch-in', authenticate, authorize('SITE_ENGINEER', 'JUNIOR_ENGINEER'), async (req, res, next) => {
   try {
     const { projectId, lat, lng, selfieUrl } = req.body;
     const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -59,10 +59,11 @@ router.post('/punch-in', authenticate, authorize('SITE_ENGINEER'), async (req, r
       });
     }
     if (project.clientId) {
+      const roleLabel = req.user.role === 'JUNIOR_ENGINEER' ? 'Junior Engineer' : 'Site Engineer';
       await notifier.send({
         userId: project.clientId,
-        title: 'Site Engineer Available',
-        body: 'Site engineer is available on the site. Please connect if required.',
+        title: `${roleLabel} Available`,
+        body: `${roleLabel} is available on the site. Please connect if required.`,
         type: 'GENERAL',
         entityType: 'attendance',
         entityId: attendance.id
@@ -74,7 +75,7 @@ router.post('/punch-in', authenticate, authorize('SITE_ENGINEER'), async (req, r
 });
 
 // POST /api/attendance/punch-out
-router.post('/punch-out', authenticate, authorize('SITE_ENGINEER'), async (req, res, next) => {
+router.post('/punch-out', authenticate, authorize('SITE_ENGINEER', 'JUNIOR_ENGINEER'), async (req, res, next) => {
   try {
     const { lat, lng } = req.body;
     const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -104,7 +105,7 @@ router.get('/today', authenticate, async (req, res, next) => {
   try {
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const where = { date: today };
-    if (req.user.role === 'SITE_ENGINEER') where.userId = req.user.id;
+    if (['SITE_ENGINEER', 'JUNIOR_ENGINEER'].includes(req.user.role)) where.userId = req.user.id;
     if (req.query.projectId) where.projectId = req.query.projectId;
 
     const records = await prisma.attendance.findMany({
@@ -123,7 +124,7 @@ router.get('/history', authenticate, async (req, res, next) => {
     const where = {};
     if (projectId) where.projectId = projectId;
     if (userId) where.userId = userId;
-    if (req.user.role === 'SITE_ENGINEER') where.userId = req.user.id;
+    if (['SITE_ENGINEER', 'JUNIOR_ENGINEER'].includes(req.user.role)) where.userId = req.user.id;
     if (startDate && endDate) where.date = { gte: new Date(startDate), lte: new Date(endDate) };
 
     const [records, total] = await Promise.all([
@@ -139,7 +140,7 @@ router.get('/history', authenticate, async (req, res, next) => {
 });
 
 // GET /api/attendance/status (check current punch status)
-router.get('/status', authenticate, authorize('SITE_ENGINEER'), async (req, res, next) => {
+router.get('/status', authenticate, authorize('SITE_ENGINEER', 'JUNIOR_ENGINEER'), async (req, res, next) => {
   try {
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const records = await prisma.attendance.findMany({
