@@ -108,7 +108,10 @@ router.post('/sites/:siteId/labour', authenticate, authorize('FOREMAN'), async (
     // Ensure the foreman is assigned to this site
     const site = await prisma.project.findFirst({
       where: { id: siteId, foremanId: req.user.id },
-      include: { manager: { select: { id: true, name: true } } },
+      include: {
+        manager: { select: { id: true, name: true } },
+        client: { select: { id: true, name: true } },
+      },
     });
     if (!site) {
       return res.status(403).json({ message: 'You are not assigned to this site.' });
@@ -132,14 +135,37 @@ router.post('/sites/:siteId/labour', authenticate, authorize('FOREMAN'), async (
       },
     });
 
+    const notifier = new NotificationService(req.app.get('io'));
+
     // Notify Project Manager about the new labour entry
     if (site.manager?.id) {
-      const notifier = new NotificationService(req.app.get('io'));
       await notifier.send({
         userId: site.manager.id,
         title: 'Labour Entry Added',
-        body: `${req.user.name} logged ${labourCount} labourers at ₹${pricePerLabour}/each for "${site.name}". Total: ₹${totalCost}`,
-        type: 'LABOUR_ENTRY_CREATED',
+        body: `${req.user.name} logged ${labourCount} labourers for "${site.name}".`,
+        type: 'GENERAL',
+        entityType: 'labourEntry',
+        entityId: entry.id,
+      });
+    }
+
+    // Notify Client, Project Manager and Site Engineer(s) that labour is working on site today
+    const siteEngineers = await prisma.user.findMany({
+      where: { role: 'SITE_ENGINEER', attendance: { some: { projectId: siteId } }, isActive: true },
+      select: { id: true },
+    });
+
+    const workingDate = new Date(date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+    const recipientIds = [site.manager?.id, site.client?.id, ...siteEngineers.map(u => u.id)]
+      .filter(Boolean)
+      .filter((id, i, arr) => arr.indexOf(id) === i); // dedupe
+
+    if (recipientIds.length > 0) {
+      await notifier.sendToMultiple({
+        userIds: recipientIds,
+        title: 'Labour Assigned Today',
+        body: `${labourCount} labourer${labourCount > 1 ? 's' : ''} will be working on "${site.name}" today (${workingDate}).`,
+        type: 'GENERAL',
         entityType: 'labourEntry',
         entityId: entry.id,
       });

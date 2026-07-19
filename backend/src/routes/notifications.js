@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const prisma = require('../config/database');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, authorize } = require('../middleware/auth');
+const NotificationService = require('../services/notificationService');
 
 // GET /api/notifications
 router.get('/', authenticate, async (req, res, next) => {
@@ -56,6 +57,49 @@ router.get('/', authenticate, async (req, res, next) => {
     }));
 
     res.json({ notifications: notificationsWithPhoto, total, unreadCount, page: parseInt(page) });
+  } catch (error) { next(error); }
+});
+
+// POST /api/notifications/broadcast-to-clients
+// Super Admin sends an arbitrary notification to: one specific client, the
+// client attached to a specific project, or all clients.
+// Body: { title, body, clientId? }             — specific client
+//       { title, body, projectId? }            — the client on that project
+//       { title, body }                        — every active client
+// If both clientId and projectId are given, clientId wins.
+router.post('/broadcast-to-clients', authenticate, authorize('SUPER_ADMIN'), async (req, res, next) => {
+  try {
+    const { title, body, clientId, projectId } = req.body;
+    if (!title || !body) return res.status(400).json({ error: 'title and body are required' });
+
+    const notifier = new NotificationService(req.app.get('io'));
+
+    if (clientId) {
+      const client = await prisma.user.findUnique({ where: { id: clientId }, select: { id: true, role: true, isActive: true } });
+      if (!client || client.role !== 'CLIENT') return res.status(404).json({ error: 'Client not found' });
+      if (!client.isActive) return res.status(400).json({ error: 'Client is not active' });
+
+      const notification = await notifier.send({ userId: client.id, title, body, type: 'GENERAL' });
+      return res.status(201).json({ message: 'Notification sent to 1 client', notifications: [notification] });
+    }
+
+    if (projectId) {
+      const project = await prisma.project.findUnique({
+        where: { id: projectId },
+        select: { id: true, clientId: true, client: { select: { id: true, isActive: true } } }
+      });
+      if (!project) return res.status(404).json({ error: 'Project not found' });
+      if (!project.clientId || !project.client) return res.status(400).json({ error: 'This project has no client assigned' });
+      if (!project.client.isActive) return res.status(400).json({ error: 'Client is not active' });
+
+      const notification = await notifier.send({
+        userId: project.client.id, title, body, type: 'GENERAL', entityType: 'project', entityId: project.id
+      });
+      return res.status(201).json({ message: 'Notification sent to 1 client', notifications: [notification] });
+    }
+
+    const notifications = await notifier.sendToRole({ role: 'CLIENT', title, body, type: 'GENERAL' });
+    res.status(201).json({ message: `Notification sent to ${notifications.length} client(s)`, notifications });
   } catch (error) { next(error); }
 });
 
