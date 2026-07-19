@@ -23,11 +23,19 @@ router.get('/labourers', authenticate, async (req, res, next) => {
 router.post('/labourers', authenticate, authorize('SITE_ENGINEER', 'PROJECT_MANAGER', 'SUPER_ADMIN','FOREMAN'), async (req, res, next) => {
   try {
     const { name, phone, aadhaar, tradeType, proposedAmount, amountPaid, projectId } = req.body;
+    if (!name || !tradeType || !projectId) return res.status(400).json({ error: 'name, tradeType and projectId are required' });
+
+    const parsedProposedAmount = parseFloat(proposedAmount);
+    if (isNaN(parsedProposedAmount)) return res.status(400).json({ error: 'proposedAmount must be a valid number' });
+
+    const parsedAmountPaid = amountPaid !== undefined ? parseFloat(amountPaid) : 0;
+    if (isNaN(parsedAmountPaid)) return res.status(400).json({ error: 'amountPaid must be a valid number' });
+
     const labourer = await prisma.labourer.create({
       data: {
         name, phone, aadhaar, tradeType, projectId,
-        proposedAmount: parseFloat(proposedAmount),
-        amountPaid: amountPaid !== undefined ? parseFloat(amountPaid) : 0
+        proposedAmount: parsedProposedAmount,
+        amountPaid: parsedAmountPaid
       }
     });
     res.status(201).json({ labourer });

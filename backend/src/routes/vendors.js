@@ -2,6 +2,19 @@ const router = require('express').Router();
 const prisma = require('../config/database');
 const { authenticate, authorize } = require('../middleware/auth');
 
+// Validates that credit/paid, if present in the body, are real numbers before
+// they hit Prisma's Decimal columns (NaN there produces a confusing error).
+function parseCreditPaid(body) {
+  const data = { ...body };
+  for (const field of ['credit', 'paid']) {
+    if (data[field] === undefined) continue;
+    const parsed = parseFloat(data[field]);
+    if (isNaN(parsed)) return { error: `${field} must be a valid number` };
+    data[field] = parsed;
+  }
+  return { data };
+}
+
 // GET /api/vendors
 router.get('/', authenticate, async (req, res, next) => {
   try {
@@ -21,7 +34,10 @@ router.get('/', authenticate, async (req, res, next) => {
 // POST /api/vendors
 router.post('/', authenticate, authorize('FINANCE', 'SUPER_ADMIN'), async (req, res, next) => {
   try {
-    const vendor = await prisma.vendor.create({ data: req.body });
+    const { data, error } = parseCreditPaid(req.body);
+    if (error) return res.status(400).json({ error });
+
+    const vendor = await prisma.vendor.create({ data });
     res.status(201).json({ vendor });
   } catch (error) { next(error); }
 });
@@ -29,7 +45,10 @@ router.post('/', authenticate, authorize('FINANCE', 'SUPER_ADMIN'), async (req, 
 // PUT /api/vendors/:id
 router.put('/:id', authenticate, authorize('FINANCE', 'SUPER_ADMIN'), async (req, res, next) => {
   try {
-    const vendor = await prisma.vendor.update({ where: { id: req.params.id }, data: req.body });
+    const { data, error } = parseCreditPaid(req.body);
+    if (error) return res.status(400).json({ error });
+
+    const vendor = await prisma.vendor.update({ where: { id: req.params.id }, data });
     res.json({ vendor });
   } catch (error) { next(error); }
 });

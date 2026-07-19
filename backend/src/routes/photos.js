@@ -15,9 +15,9 @@ const router = require('express').Router();
 const multer = require('multer');
 const { v4: uuidv4 } = require('uuid');
 const path = require('path');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, authorize } = require('../middleware/auth');
 const prisma = require('../config/database');
-const { uploadBuffer } = require('../config/cloudinary');
+const { uploadBuffer, destroyByUrl } = require('../config/cloudinary');
 
 // ── Multer (used by POST /api/tasks/:id/photos) ────────────────────────────
 const storage = multer.memoryStorage();
@@ -189,5 +189,25 @@ router.post(
     }
   },
 );
+
+// ── DELETE /api/photos/:id ─────────────────────────────────────────────────
+router.delete('/:id', authenticate, authorize('SUPER_ADMIN', 'PROJECT_MANAGER'), async (req, res, next) => {
+  try {
+    const photo = await prisma.photo.findUnique({ where: { id: req.params.id } });
+    if (!photo) return res.status(404).json({ error: 'Photo not found' });
+
+    await prisma.photo.delete({ where: { id: req.params.id } });
+
+    try {
+      await destroyByUrl(photo.url);
+    } catch (cloudinaryError) {
+      console.warn(`[Photo Delete] Failed to remove Cloudinary asset for photo ${photo.id}:`, cloudinaryError.message);
+    }
+
+    res.json({ message: 'Photo deleted' });
+  } catch (error) {
+    next(error);
+  }
+});
 
 module.exports = router;

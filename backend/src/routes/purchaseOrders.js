@@ -379,4 +379,24 @@ router.put('/:id', authenticate, authorize('SITE_ENGINEER', 'PROJECT_MANAGER', '
   }
 });
 
+// DELETE /api/purchase-orders/:id
+router.delete('/:id', authenticate, authorize('SUPER_ADMIN'), async (req, res, next) => {
+  try {
+    const existing = await prisma.purchaseOrder.findUnique({ where: { id: req.params.id } });
+    if (!existing) return res.status(404).json({ error: 'Purchase order not found' });
+
+    await prisma.$transaction(async (tx) => {
+      // Detach any POs transferred from this one, and its delivery, before deleting
+      // (POItem cascades and Photo is set-null at the DB level already).
+      await tx.purchaseOrder.updateMany({ where: { transferredFromId: req.params.id }, data: { transferredFromId: null } });
+      await tx.delivery.deleteMany({ where: { purchaseOrderId: req.params.id } });
+      await tx.purchaseOrder.delete({ where: { id: req.params.id } });
+    });
+
+    res.json({ message: 'Purchase order deleted' });
+  } catch (error) {
+    next(error);
+  }
+});
+
 module.exports = router;
