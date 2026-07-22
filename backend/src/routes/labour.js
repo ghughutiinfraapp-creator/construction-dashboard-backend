@@ -175,4 +175,27 @@ router.post('/sites/:id/labour', authenticate, authorize('FOREMAN'), async (req,
   }
 });
 
+// PUT /api/labour/labourers/:id
+router.put('/labourers/:id', authenticate, authorize('SUPER_ADMIN', 'FOREMAN'), async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { proposedAmount, amountPaid } = req.body;
+
+    const data = {};
+    if (proposedAmount !== undefined) {
+      const p = parseFloat(proposedAmount);
+      if (isNaN(p)) return res.status(400).json({ error: 'proposedAmount must be a valid number' });
+      data.proposedAmount = p;
+    }
+    if (amountPaid !== undefined) {
+      const a = parseFloat(amountPaid);
+      if (isNaN(a)) return res.status(400).json({ error: 'amountPaid must be a valid number' });
+      data.amountPaid = a;
+    }
+
+    const labourer = await prisma.labourer.update({ where: { id }, data });
+    res.json({ labourer });
+  } catch (error) { next(error); }
+});
+
 module.exports = router;
