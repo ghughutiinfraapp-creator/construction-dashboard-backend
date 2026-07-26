@@ -54,17 +54,17 @@ router.get('/', authenticate, async (req, res, next) => {
 
     // Junior Engineer is a supporting field role — sees every task on any
     // project they've attended (via Attendance), not just tasks assigned to them.
-    if (req.user.role === 'JUNIOR_ENGINEER') {
-      const attended = await prisma.attendance.findMany({
-        where: { userId: req.user.id },
-        select: { projectId: true },
-        distinct: ['projectId'],
-      });
-      const allowedProjectIds = attended.map(a => a.projectId);
-      where.projectId = (where.projectId && allowedProjectIds.includes(where.projectId))
-        ? where.projectId
-        : (where.projectId ? { in: [] } : { in: allowedProjectIds });
-    }
+    // if (req.user.role === 'JUNIOR_ENGINEER') {
+    //   const attended = await prisma.attendance.findMany({
+    //     where: { userId: req.user.id },
+    //     select: { projectId: true },
+    //     distinct: ['projectId'],
+    //   });
+    //   const allowedProjectIds = attended.map(a => a.projectId);
+    //   where.projectId = (where.projectId && allowedProjectIds.includes(where.projectId))
+    //     ? where.projectId
+    //     : (where.projectId ? { in: [] } : { in: allowedProjectIds });
+    // }
 
     const [tasks, total] = await Promise.all([
       prisma.task.findMany({
