@@ -10,9 +10,15 @@
  *      explicitly from req.params so it works even if body fields are missing.
  *   4. Cloudinary folder resolution unchanged — slug logic kept identical to
  *      frontend so URL-based photo matching continues to work.
- *   5. NEW: POST /api/uploads/photo now creates a notification for the PO
- *      creator (site engineer/admin) whenever a delivery-linked photo is
- *      uploaded — per-item photo submits AND the final delivery-proof photo.
+ *   5. POST /api/uploads/photo creates a notification whenever a
+ *      delivery-linked photo is uploaded — per-item photo submits AND the
+ *      final delivery-proof photo.
+ *   6. NEW: that notification now goes to the site engineer (PO creator)
+ *      AND every Admin, via NotificationService, so it also fires the
+ *      Socket.io real-time event instead of silently writing to the DB only.
+ *      Previously only the site engineer was notified, so Admin never saw
+ *      per-item delivery photos on the notifications page until the final
+ *      "Submit Delivery" step (and, before that fix, not even then).
  */
 
 const router  = require('express').Router();
@@ -22,6 +28,7 @@ const { v4: uuidv4 } = require('uuid');
 const { authenticate } = require('../middleware/auth');
 const prisma  = require('../config/database');
 const { uploadBuffer } = require('../config/cloudinary');
+const NotificationService = require('../services/notificationService');
 
 // ── Slug helper (must match frontend slugify exactly) ──────────────────────
 function slugify(str) {
@@ -96,48 +103,64 @@ async function savePhotoRecord({ url, req, overrides = {} }) {
   });
 }
 
-// ── Notify site engineer/admin when a delivery-linked photo is uploaded ────
+// ── Notify site engineer AND admin when a delivery-linked photo is uploaded ─
 // Fires for both per-item photo submits (req.body.itemId/itemName present)
 // and the final overall delivery-proof photo (no itemId). Fails silently
 // (logs only) so a notification error never blocks the photo upload itself.
+// Uses NotificationService so the Socket.io real-time event fires too, same
+// as every other notification path in the app.
 async function notifyDeliveryPhotoUploaded({ photo, req }) {
   if (!photo?.deliveryId) return;
 
-  const delivery = await prisma.delivery.findUnique({
-    where: { id: photo.deliveryId },
-    include: {
-      purchaseOrder: {
-        include: {
-          project:   { select: { id: true, name: true } },
-          createdBy: { select: { id: true, name: true } },
+  try {
+    const delivery = await prisma.delivery.findUnique({
+      where: { id: photo.deliveryId },
+      include: {
+        purchaseOrder: {
+          select: {
+            id: true,
+            poNumber: true,
+            project:   { select: { id: true, name: true } },
+            createdBy: { select: { id: true, name: true } },
+          },
         },
       },
-    },
-  });
+    });
+    if (!delivery?.purchaseOrder) return;
 
-  const recipient = delivery?.purchaseOrder?.createdBy;
-  if (!recipient) return; // no one to notify
+    const siteName   = delivery.purchaseOrder.project?.name || 'the site';
+    const poNumber   = delivery.purchaseOrder.poNumber;
+    const personName = req.user.name || 'A delivery person';
+    const itemName   = req.body?.itemName;
 
-  const siteName   = delivery.purchaseOrder.project?.name || 'the site';
-  const personName = req.user.name || 'A delivery person';
-  const itemName   = req.body?.itemName;
+    const title = itemName ? `Item delivered: ${itemName}` : 'Delivery photo submitted';
+    const body  = itemName
+      ? `${personName} delivered "${itemName}" for PO ${poNumber} at ${siteName}.`
+      : `Delivery photo submitted for PO ${poNumber} at ${siteName} by ${personName}.`;
 
-  const title = itemName ? `Item delivered: ${itemName}` : 'Delivery photo submitted';
-  const body  = itemName
-    ? `${personName} delivered "${itemName}" at ${siteName}.`
-    : `Delivery done at ${siteName} by ${personName}.`;
+    const notifier = new NotificationService(req.app.get('io'));
 
-  await prisma.notification.create({
-    data: {
-      userId:     recipient.id,
-      type:       'DELIVERY_COMPLETED',
-      title,
-      body,
-      entityType: 'delivery',
-      entityId:   delivery.id,
-      isRead:     false,
-    },
-  });
+    // Site engineer who raised the PO
+    if (delivery.purchaseOrder.createdBy) {
+      await notifier.send({
+        userId: delivery.purchaseOrder.createdBy.id,
+        title, body,
+        type: 'DELIVERY_COMPLETED',
+        entityType: 'delivery', entityId: delivery.id,
+      });
+    }
+
+    // Admin sees every photo submission on the notifications page, not just
+    // the final "Submit Delivery" step
+    await notifier.sendToRole({
+      role: 'SUPER_ADMIN',
+      title, body,
+      type: 'DELIVERY_COMPLETED',
+      entityType: 'delivery', entityId: delivery.id,
+    });
+  } catch (err) {
+    console.error('[uploads] Failed to create delivery notification:', err);
+  }
 }
 
 // ── Multer config ──────────────────────────────────────────────────────────
@@ -190,9 +213,9 @@ router.post(
       const url   = uploadResult.secure_url;
       const photo = await savePhotoRecord({ url, req });
 
-      // Fire-and-forget: notify the PO creator (site engineer/admin) if this
-      // photo is tied to a delivery. Never let a notification failure block
-      // the upload response.
+      // Fire-and-forget: notify the PO creator (site engineer) and Admin if
+      // this photo is tied to a delivery. Never let a notification failure
+      // block the upload response.
       if (photo) {
         notifyDeliveryPhotoUploaded({ photo, req }).catch(err =>
           console.error('[uploads] Failed to create delivery notification:', err)
