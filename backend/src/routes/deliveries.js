@@ -75,7 +75,7 @@ router.put('/:id/picked-up', authenticate, authorize('DELIVERY_PERSON'), async (
 // their ordered quantity, so the PO/Delivery are marked PARTIALLY_DELIVERED
 // and stay open — this same route can be called again for the next drop.
 // Only once every item's receivedQty reaches its ordered quantity does the
-// status flip to DELIVERED, which is what unlocks /verify to close the PO.
+// status flip to DELIVERED, which is what unlocks /verify and /close-po.
 router.put('/:id/delivered', authenticate, authorize('DELIVERY_PERSON'), async (req, res, next) => {
   try {
     const { deliveryPhotoUrl, items } = req.body;
@@ -133,8 +133,9 @@ router.put('/:id/delivered', authenticate, authorize('DELIVERY_PERSON'), async (
       data: { status: fullyDelivered ? 'DELIVERED' : 'PARTIALLY_DELIVERED' }
     });
 
-    // Notify site engineer
     const notifier = new NotificationService(req.app.get('io'));
+
+    // Notify site engineer
     await notifier.send({
       userId: delivery.purchaseOrder.createdById,
       title: fullyDelivered ? 'Material Delivered - Please Verify' : 'Partial Delivery Received',
@@ -143,6 +144,27 @@ router.put('/:id/delivered', authenticate, authorize('DELIVERY_PERSON'), async (
         : `Partial delivery received for PO ${delivery.purchaseOrder.poNumber} at ${delivery.purchaseOrder.project.name}. Some items are still pending — PO stays open.`,
       type: fullyDelivered ? 'VERIFICATION_NEEDED' : 'GENERAL', entityType: 'delivery', entityId: delivery.id
     });
+
+    // Admin always sees every submission on the notifications page
+    await notifier.sendToRole({
+      role: 'SUPER_ADMIN',
+      title: fullyDelivered ? 'Delivery Completed' : 'Partial Delivery Received',
+      body: fullyDelivered
+        ? `PO ${delivery.purchaseOrder.poNumber} fully delivered by ${req.user.name} to ${delivery.purchaseOrder.project.name}. Ready to close.`
+        : `Partial delivery for PO ${delivery.purchaseOrder.poNumber} at ${delivery.purchaseOrder.project.name} by ${req.user.name}.`,
+      type: fullyDelivered ? 'DELIVERY_COMPLETED' : 'GENERAL',
+      entityType: 'delivery', entityId: delivery.id
+    });
+
+    // Finance gets a heads-up the moment it's fully complete
+    if (fullyDelivered) {
+      await notifier.sendToRole({
+        role: 'FINANCE',
+        title: 'PO Ready to Close',
+        body: `PO ${delivery.purchaseOrder.poNumber} has been fully delivered by ${req.user.name}. You can close it now.`,
+        type: 'DELIVERY_COMPLETED', entityType: 'delivery', entityId: delivery.id
+      });
+    }
 
     // Real-time update
     const io = req.app.get('io');
@@ -214,5 +236,69 @@ router.put('/:id/verify', authenticate, authorize('SITE_ENGINEER', 'PROJECT_MANA
     }
   } catch (error) { next(error); }
 });
+
+// PUT /api/deliveries/:id/close-po
+// Lightweight "everything arrived, close it" action for the delivery person
+// who made the drop, or Finance/Admin from their dashboards. Only works once
+// every item is fully received (delivery.status === 'DELIVERED'). This does
+// NOT replace the engineer's /verify quality check — whichever happens first
+// closes the PO; the other becomes a no-op.
+router.put(
+  '/:id/close-po',
+  authenticate,
+  authorize('DELIVERY_PERSON', 'FINANCE', 'SUPER_ADMIN', 'PROJECT_MANAGER', 'SITE_ENGINEER'),
+  async (req, res, next) => {
+    try {
+      const delivery = await prisma.delivery.findUnique({
+        where: { id: req.params.id },
+        include: { purchaseOrder: { select: { id: true, poNumber: true, projectId: true, status: true } } }
+      });
+      if (!delivery) return res.status(404).json({ error: 'Delivery not found' });
+
+      if (req.user.role === 'DELIVERY_PERSON' && delivery.deliveryPersonId !== req.user.id) {
+        return res.status(403).json({ error: 'You can only close deliveries assigned to you' });
+      }
+
+      if (delivery.status !== 'DELIVERED') {
+        return res.status(400).json({
+          error: 'This PO cannot be closed yet — some items are still pending delivery.'
+        });
+      }
+      if (delivery.purchaseOrder.status === 'CLOSED') {
+        return res.status(400).json({ error: 'This PO is already closed.' });
+      }
+
+      await prisma.delivery.update({
+        where: { id: req.params.id },
+        data: {
+          status: 'VERIFIED',
+          verifiedById: delivery.verifiedById || req.user.id,
+          verifiedAt: delivery.verifiedAt || new Date()
+        }
+      });
+      await prisma.purchaseOrder.update({
+        where: { id: delivery.purchaseOrder.id },
+        data: { status: 'CLOSED' }
+      });
+
+      const notifier = new NotificationService(req.app.get('io'));
+      await notifier.sendToRole({
+        role: 'FINANCE', title: 'PO Closed',
+        body: `PO ${delivery.purchaseOrder.poNumber} closed by ${req.user.name}`,
+        type: 'GENERAL', entityType: 'purchase_order', entityId: delivery.purchaseOrder.id
+      });
+      await notifier.sendToRole({
+        role: 'SUPER_ADMIN', title: 'PO Closed',
+        body: `PO ${delivery.purchaseOrder.poNumber} closed by ${req.user.name}`,
+        type: 'GENERAL', entityType: 'purchase_order', entityId: delivery.purchaseOrder.id
+      });
+
+      const io = req.app.get('io');
+      if (io) io.to(`project-${delivery.purchaseOrder.projectId}`).emit('delivery-update', delivery);
+
+      res.json({ message: 'Purchase order closed.' });
+    } catch (error) { next(error); }
+  }
+);
 
 module.exports = router;
