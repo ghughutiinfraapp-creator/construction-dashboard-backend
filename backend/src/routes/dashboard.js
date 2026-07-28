@@ -29,11 +29,16 @@ router.get('/stats', authenticate, async (req, res, next) => {
       _sum: { totalAmount: true }
     });
 
+    const budgetAgg = await prisma.project.aggregate({
+  _sum: { budget: true }
+});
+
     res.json({
       totalProjects, activeProjects, totalEngineers,
       todayAttendance, pendingPOs, totalPOs,
       totalLabourers, activeTasks, overdueTasks,
-      totalSpend: poSpend._sum.totalAmount || 0
+      totalSpend: poSpend._sum.totalAmount || 0,
+      totalEstimatedBudget: budgetAgg._sum.budget || 0
     });
   } catch (error) { next(error); }
 });
