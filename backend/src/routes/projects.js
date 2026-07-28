@@ -53,10 +53,12 @@ router.get('/', authenticate, async (req, res, next) => {
 // POST /api/projects
 router.post('/', authenticate, authorize('SUPER_ADMIN', 'PROJECT_MANAGER'), async (req, res, next) => {
   try {
-    const { name, description, address, clientId, budget, startDate, endDate, geofenceLat, geofenceLng, geofenceRadius } = req.body;
+    const { name, description, address, clientId, managerId, budget, startDate, endDate, geofenceLat, geofenceLng, geofenceRadius } = req.body;
     const project = await prisma.project.create({
       data: {
-        name, description, address, managerId: req.user.id, clientId,
+        name, description, address,
+        managerId: managerId || req.user.id, // allow override, default to creator
+        clientId,
         budget: budget ? parseFloat(budget) : null,
         startDate: startDate ? new Date(startDate) : null,
         endDate: endDate ? new Date(endDate) : null,
