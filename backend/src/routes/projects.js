@@ -9,12 +9,12 @@ router.get('/', authenticate, async (req, res, next) => {
     let where = {};
 
     // Role-based filtering
-    // NOTE: SITE_ENGINEER is intentionally NOT filtered to assigned-only projects
-    // anymore — engineers can see & punch into ANY site. We still tell the
-    // frontend which sites are "theirs" so they can be sorted to the top.
+    // NOTE: SITE_ENGINEER is intentionally NOT filtered to assigned-only
+    // projects — engineers can see & punch into ANY site (we still flag
+    // which ones are "theirs" so those sort to the top). FOREMAN has no
+    // assignment concept at all: every foreman simply sees every project.
     if (req.user.role === 'CLIENT') where.clientId = req.user.id;
     else if (req.user.role === 'PROJECT_MANAGER') where.managerId = req.user.id;
-    else if (req.user.role === 'FOREMAN') where.foremanId = req.user.id;
     if (status) where.status = status;
     if (search) where.name = { contains: search, mode: 'insensitive' };
 
@@ -45,6 +45,8 @@ router.get('/', authenticate, async (req, res, next) => {
         .map(({ tasks, ...p }) => ({ ...p, isAssigned: Array.isArray(tasks) && tasks.length > 0 }))
         .sort((a, b) => Number(b.isAssigned) - Number(a.isAssigned));
     }
+    // FOREMAN: no filtering, no flagging — `result` stays as the plain
+    // `projects` list, every foreman just sees every project.
 
     res.json({ projects: result, total, page: parseInt(page), totalPages: Math.ceil(total / limit) });
   } catch (error) { next(error); }
