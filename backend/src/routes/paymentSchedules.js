@@ -439,4 +439,27 @@ router.get('/:id/summary', authenticate, async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
+// ─── PAYMENT HISTORY FOR AN INSTALLMENT ───────────────────────────────────────
+// GET /api/payment-schedules/:id/installments/:iid/payments
+router.get('/:id/installments/:iid/payments', authenticate, async (req, res, next) => {
+  try {
+    const installment = await prisma.paymentInstallment.findUnique({
+      where: { id: req.params.iid },
+      include: {
+        payments: {
+          include: { recordedBy: { select: { id: true, name: true } } },
+          orderBy: { paymentDate: 'desc' }
+        },
+        task: { select: { id: true, title: true } }
+      }
+    });
+    if (!installment) return res.status(404).json({ error: 'Installment not found' });
+
+    res.json({
+      installment: { ...installment, effectiveStatus: effectiveStatus(installment) },
+      payments: installment.payments
+    });
+  } catch (error) { next(error); }
+});
+
 module.exports = router;
