@@ -11,7 +11,7 @@ router.post('/register', authenticate, authorize('SUPER_ADMIN', 'PROJECT_MANAGER
     const { name, email, phone, password, role } = req.body;
     const hashedPassword = await bcrypt.hash(password, 12);
     const user = await prisma.user.create({
-      data: { name, email, phone, password: hashedPassword, role },
+      data: { name, email, phone, password: hashedPassword, role: role?.trim() },
       select: { id: true, name: true, email: true, phone: true, role: true, createdAt: true }
     });
     res.status(201).json({ message: 'User created successfully', user });
@@ -24,10 +24,11 @@ router.post('/register', authenticate, authorize('SUPER_ADMIN', 'PROJECT_MANAGER
 router.post('/mobile/register', async (req, res, next) => {
   try {
     const { name, email, phone, password, role } = req.body;
+    const trimmedRole = role?.trim();
 
     const allowedRoles = ['SITE_ENGINEER', 'JUNIOR_ENGINEER', 'DELIVERY_PERSON', 'CLIENT'];
 
-    if (!allowedRoles.includes(role)) {
+    if (!allowedRoles.includes(trimmedRole)) {
       return res.status(400).json({ error: 'Invalid role selected' });
     }
 
@@ -48,7 +49,7 @@ router.post('/mobile/register', async (req, res, next) => {
         email,
         phone,
         password: hashedPassword,
-        role,
+        role: trimmedRole,
       },
     });
 
