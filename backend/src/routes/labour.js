@@ -179,7 +179,7 @@ router.post('/sites/:id/labour', authenticate, authorize('FOREMAN'), async (req,
 router.put('/labourers/:id', authenticate, authorize('SUPER_ADMIN', 'FOREMAN'), async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { proposedAmount, amountPaid } = req.body;
+    const { proposedAmount } = req.body;
 
     const data = {};
     if (proposedAmount !== undefined) {
@@ -187,14 +187,55 @@ router.put('/labourers/:id', authenticate, authorize('SUPER_ADMIN', 'FOREMAN'), 
       if (isNaN(p)) return res.status(400).json({ error: 'proposedAmount must be a valid number' });
       data.proposedAmount = p;
     }
-    if (amountPaid !== undefined) {
-      const a = parseFloat(amountPaid);
-      if (isNaN(a)) return res.status(400).json({ error: 'amountPaid must be a valid number' });
-      data.amountPaid = a;
-    }
 
     const labourer = await prisma.labourer.update({ where: { id }, data });
     res.json({ labourer });
+  } catch (error) { next(error); }
+});
+
+// POST /api/labour/labourers/:id/payments
+router.post('/labourers/:id/payments', authenticate, authorize('SUPER_ADMIN', 'FOREMAN'), async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { amount, paymentDate, paymentMode, receiptNumber, notes } = req.body;
+
+    const parsedAmount = parseFloat(amount);
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+      return res.status(400).json({ error: 'amount must be a positive number' });
+    }
+
+    const [payment] = await prisma.$transaction([
+      prisma.labourPayment.create({
+        data: {
+          labourerId: id,
+          amount: parsedAmount,
+          paymentDate: paymentDate ? new Date(paymentDate) : undefined,
+          paymentMode,
+          receiptNumber,
+          notes,
+          recordedById: req.user.id
+        }
+      }),
+      prisma.labourer.update({
+        where: { id },
+        data: { amountPaid: { increment: parsedAmount } }
+      })
+    ]);
+
+    res.status(201).json({ payment });
+  } catch (error) { next(error); }
+});
+
+// GET /api/labour/labourers/:id/payments
+router.get('/labourers/:id/payments', authenticate, async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const payments = await prisma.labourPayment.findMany({
+      where: { labourerId: id },
+      include: { recordedBy: { select: { id: true, name: true } } },
+      orderBy: { paymentDate: 'desc' }
+    });
+    res.json({ payments });
   } catch (error) { next(error); }
 });
 

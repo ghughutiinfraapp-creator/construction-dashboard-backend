@@ -163,6 +163,7 @@ model User {
   paymentRecords    PaymentRecord[]   @relation("PaymentRecorder")
   requestedInstallments PaymentInstallment[] @relation("InstallmentRequester")
   vendorPayments    VendorPayment[]   @relation("VendorPaymentRecorder")
+  labourPayments    LabourPayment[]   @relation("LabourPaymentRecorder")
 
   @@map("users")
 }
@@ -308,6 +309,7 @@ model Labourer {
   // Relations
   project    Project            @relation(fields: [projectId], references: [id])
   attendance LabourAttendance[]
+  payments   LabourPayment[]
 
   @@map("labourers")
 }
@@ -630,4 +632,22 @@ model VendorPayment {
   recordedBy User   @relation("VendorPaymentRecorder", fields: [recordedById], references: [id])
 
   @@map("vendor_payments")
+}
+
+// Tracks each individual payment made to a labourer against their proposed wage.
+model LabourPayment {
+  id            String      @id @default(uuid())
+  labourerId    String      @map("labourer_id")
+  amount        Decimal     @db.Decimal(10, 2)
+  paymentDate   DateTime    @default(now()) @map("payment_date")
+  paymentMode   PaymentMode @default(BANK_TRANSFER) @map("payment_mode")
+  receiptNumber String?     @map("receipt_number")
+  notes         String?
+  recordedById  String      @map("recorded_by_id")
+  createdAt     DateTime    @default(now()) @map("created_at")
+
+  labourer   Labourer @relation(fields: [labourerId], references: [id], onDelete: Cascade)
+  recordedBy User     @relation("LabourPaymentRecorder", fields: [recordedById], references: [id])
+
+  @@map("labour_payments")
 }
