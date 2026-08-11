@@ -75,6 +75,7 @@ router.post('/punch-in', authenticate, authorize('SITE_ENGINEER', 'JUNIOR_ENGINE
 });
 
 // POST /api/attendance/punch-out
+// POST /api/attendance/punch-out
 router.post('/punch-out', authenticate, authorize('SITE_ENGINEER', 'JUNIOR_ENGINEER'), async (req, res, next) => {
   try {
     const { lat, lng } = req.body;
@@ -93,8 +94,39 @@ router.post('/punch-out', authenticate, authorize('SITE_ENGINEER', 'JUNIOR_ENGIN
       data: { punchOutTime, punchOutLat: lat, punchOutLng: lng, totalHours: Math.round(totalHours * 100) / 100 }
     });
 
+    // Need project name/managerId/clientId for the notification — attendance
+    // only stores projectId, so fetch it (mirrors punch-in's shape).
+    const project = await prisma.project.findUnique({
+      where: { id: attendance.projectId },
+      select: { id: true, name: true, managerId: true, clientId: true }
+    });
+
     const io = req.app.get('io');
     if (io) io.to(`project-${attendance.projectId}`).emit('attendance-update', { type: 'punch-out', userId: req.user.id, attendance: updated });
+
+    // Notify client and project manager, same pattern as punch-in
+    const notifier = new NotificationService(io);
+    if (project?.managerId) {
+      await notifier.send({
+        userId: project.managerId,
+        title: 'Engineer Punched Out',
+        body: `${req.user.name} has punched out from ${project.name}`,
+        type: 'GENERAL',
+        entityType: 'attendance',
+        entityId: updated.id
+      });
+    }
+    if (project?.clientId) {
+      const roleLabel = req.user.role === 'JUNIOR_ENGINEER' ? 'Junior Engineer' : 'Site Engineer';
+      await notifier.send({
+        userId: project.clientId,
+        title: `${roleLabel} Punched Out`,
+        body: `${roleLabel} has ended their session at ${project.name}.`,
+        type: 'GENERAL',
+        entityType: 'attendance',
+        entityId: updated.id
+      });
+    }
 
     res.json({ message: 'Punched out successfully', attendance: updated });
   } catch (error) { next(error); }
