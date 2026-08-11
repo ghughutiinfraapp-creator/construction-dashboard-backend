@@ -365,7 +365,7 @@ router.put('/:id/status', authenticate, async (req, res, next) => {
 // PUT /api/tasks/:id  (generic update — must come AFTER specific sub-routes)
 // Pass a `subtasks` array to sync child tasks: entries with an `id` update that
 // existing subtask, entries without one are created as new subtasks.
-router.put('/:id', authenticate, authorize('SUPER_ADMIN', 'PROJECT_MANAGER'), async (req, res, next) => {
+router.put('/:id', authenticate, authorize('SUPER_ADMIN', 'PROJECT_MANAGER','SITE_ENGINEER'), async (req, res, next) => {
   try {
     const { title, description, assignedToId, priority, startDate, dueDate, categoryId, remark, subtasks } = req.body;
     const data = {};
