@@ -3,7 +3,7 @@ const prisma = require('../config/database');
 const { authenticate, authorize } = require('../middleware/auth');
 const NotificationService = require('../services/notificationService');
 
-// GET /api/deliveries (delivery person sees their assignments)
+// GET /api/deliveries (delivery person sees their own; every other role sees ALL)
 router.get('/', authenticate, async (req, res, next) => {
   try {
     const { status, page = 1, limit = 20 } = req.query;
@@ -58,6 +58,9 @@ router.get('/:id', authenticate, async (req, res, next) => {
 });
 
 // PUT /api/deliveries/:id/picked-up
+// Stays DELIVERY_PERSON-only on purpose — this is what enforces the pickup
+// gate. Engineers can never mark pickup, which is exactly why their photo
+// submission stays locked until the delivery person does this step.
 router.put('/:id/picked-up', authenticate, authorize('DELIVERY_PERSON'), async (req, res, next) => {
   try {
     const delivery = await prisma.delivery.update({
@@ -68,15 +71,21 @@ router.put('/:id/picked-up', authenticate, authorize('DELIVERY_PERSON'), async (
   } catch (error) { next(error); }
 });
 
-// PUT /api/deliveries/:id/delivered (delivery person uploads photo)
+// PUT /api/deliveries/:id/delivered (delivery person OR site engineer/PM uploads photo)
 // Body: { deliveryPhotoUrl, items?: [{ itemId, receivedQty }] }
+// UPDATED: now also authorizes SITE_ENGINEER and PROJECT_MANAGER, so an
+// engineer at the site can submit item photos/quantities themselves (e.g.
+// if the delivery person can't, or the engineer is confirming what actually
+// arrived on site) — without being able to create POs or deliveries, since
+// there's no create route here, only this update-in-place one.
 // `items` reports how much of each ordered item arrived in THIS drop.
-// If the vendor couldn't deliver everything, the leftover items stay short of
-// their ordered quantity, so the PO/Delivery are marked PARTIALLY_DELIVERED
-// and stay open — this same route can be called again for the next drop.
-// Only once every item's receivedQty reaches its ordered quantity does the
-// status flip to DELIVERED, which is what unlocks /verify and /close-po.
-router.put('/:id/delivered', authenticate, authorize('DELIVERY_PERSON'), async (req, res, next) => {
+// If the vendor couldn't deliver everything, the leftover items stay short
+// of their ordered quantity, so the PO/Delivery are marked
+// PARTIALLY_DELIVERED and stay open — this same route can be called again
+// for the next drop. Only once every item's receivedQty reaches its ordered
+// quantity does the status flip to DELIVERED, which is what unlocks
+// /verify and /close-po.
+router.put('/:id/delivered', authenticate, authorize('DELIVERY_PERSON', 'SITE_ENGINEER', 'PROJECT_MANAGER'), async (req, res, next) => {
   try {
     const { deliveryPhotoUrl, items } = req.body;
 
@@ -107,7 +116,6 @@ router.put('/:id/delivered', authenticate, authorize('DELIVERY_PERSON'), async (
         )
       );
     } else {
-      // No item-level breakdown supplied — treat as a full delivery of everything still pending.
       await prisma.$transaction(
         existing.purchaseOrder.items
           .filter(i => i.receivedQty < i.quantity)
@@ -135,7 +143,6 @@ router.put('/:id/delivered', authenticate, authorize('DELIVERY_PERSON'), async (
 
     const notifier = new NotificationService(req.app.get('io'));
 
-    // Notify site engineer
     await notifier.send({
       userId: delivery.purchaseOrder.createdById,
       title: fullyDelivered ? 'Material Delivered - Please Verify' : 'Partial Delivery Received',
@@ -145,7 +152,6 @@ router.put('/:id/delivered', authenticate, authorize('DELIVERY_PERSON'), async (
       type: fullyDelivered ? 'VERIFICATION_NEEDED' : 'GENERAL', entityType: 'delivery', entityId: delivery.id
     });
 
-    // Admin always sees every submission on the notifications page
     await notifier.sendToRole({
       role: 'SUPER_ADMIN',
       title: fullyDelivered ? 'Delivery Completed' : 'Partial Delivery Received',
@@ -156,7 +162,6 @@ router.put('/:id/delivered', authenticate, authorize('DELIVERY_PERSON'), async (
       entityType: 'delivery', entityId: delivery.id
     });
 
-    // Finance gets a heads-up the moment it's fully complete
     if (fullyDelivered) {
       await notifier.sendToRole({
         role: 'FINANCE',
@@ -166,7 +171,6 @@ router.put('/:id/delivered', authenticate, authorize('DELIVERY_PERSON'), async (
       });
     }
 
-    // Real-time update
     const io = req.app.get('io');
     if (io) io.to(`project-${delivery.purchaseOrder.projectId}`).emit('delivery-update', delivery);
 
@@ -205,7 +209,6 @@ router.put('/:id/verify', authenticate, authorize('SITE_ENGINEER', 'PROJECT_MANA
         data: { status: 'CLOSED' }
       });
 
-      // Notify finance + admin
       const notifier = new NotificationService(req.app.get('io'));
       await notifier.sendToRole({
         role: 'FINANCE', title: 'PO Verified & Closed',
@@ -238,11 +241,6 @@ router.put('/:id/verify', authenticate, authorize('SITE_ENGINEER', 'PROJECT_MANA
 });
 
 // PUT /api/deliveries/:id/close-po
-// Lightweight "everything arrived, close it" action for the delivery person
-// who made the drop, or Finance/Admin from their dashboards. Only works once
-// every item is fully received (delivery.status === 'DELIVERED'). This does
-// NOT replace the engineer's /verify quality check — whichever happens first
-// closes the PO; the other becomes a no-op.
 router.put(
   '/:id/close-po',
   authenticate,
