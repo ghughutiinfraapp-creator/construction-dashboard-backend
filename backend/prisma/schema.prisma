@@ -127,43 +127,43 @@ enum SuggestionStatus {
 
 // ─── USERS ──────────────────────────────────────────────────────────
 model User {
-  id            String   @id @default(uuid())
-  name          String
-  email         String   @unique
-  phone         String?  @unique
-  password      String
-  role          Role
-  avatar        String?
-  deviceId      String?  @map("device_id")
-  fcmToken      String?  @map("fcm_token")
-  isActive      Boolean  @default(true) @map("is_active")
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  phone     String?  @unique
+  password  String
+  role      Role
+  avatar    String?
+  deviceId  String?  @map("device_id")
+  fcmToken  String?  @map("fcm_token")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
-  managedProjects    Project[]          @relation("ProjectManager")
-  clientProjects     Project[]          @relation("ProjectClient")
-  assignedTasks      Task[]             @relation("TaskAssignee")
-  createdTasks       Task[]             @relation("TaskCreator")
-  attendance         Attendance[]
-  labourMarkedBy     LabourAttendance[] @relation("MarkedBy")
-  createdPOs         PurchaseOrder[]    @relation("POCreator")
-  approvedPOs        PurchaseOrder[]    @relation("POApprover")
-  deliveries         Delivery[]         @relation("DeliveryPerson")
-  verifiedDeliveries Delivery[]         @relation("DeliveryVerifier")
-  photos             Photo[]
-  notifications      Notification[]
-  refreshTokens      RefreshToken[]
+  managedProjects       Project[]                 @relation("ProjectManager")
+  clientProjects        Project[]                 @relation("ProjectClient")
+  assignedTasks         Task[]                    @relation("TaskAssignee")
+  createdTasks          Task[]                    @relation("TaskCreator")
+  attendance            Attendance[]
+  subContractorMarkedBy SubContractorAttendance[] @relation("MarkedBy")
+  createdPOs            PurchaseOrder[]           @relation("POCreator")
+  approvedPOs           PurchaseOrder[]           @relation("POApprover")
+  deliveries            Delivery[]                @relation("DeliveryPerson")
+  verifiedDeliveries    Delivery[]                @relation("DeliveryVerifier")
+  photos                Photo[]
+  notifications         Notification[]
+  refreshTokens         RefreshToken[]
 
-  foremanProjects   Project[]        @relation("ForemanProjects")
-  labourEntries     LabourEntry[]    @relation("LabourCreatedBy")
-  issues            Issue[]
-  suggestions       Suggestion[]
-  paymentSchedules  PaymentSchedule[] @relation("ScheduleCreator")
-  paymentRecords    PaymentRecord[]   @relation("PaymentRecorder")
-  requestedInstallments PaymentInstallment[] @relation("InstallmentRequester")
-  vendorPayments    VendorPayment[]   @relation("VendorPaymentRecorder")
-  labourPayments    LabourPayment[]   @relation("LabourPaymentRecorder")
+  foremanProjects       Project[]              @relation("ForemanProjects")
+  labourEntries         LabourEntry[]          @relation("LabourCreatedBy")
+  issues                Issue[]
+  suggestions           Suggestion[]
+  paymentSchedules      PaymentSchedule[]      @relation("ScheduleCreator")
+  paymentRecords        PaymentRecord[]        @relation("PaymentRecorder")
+  requestedInstallments PaymentInstallment[]   @relation("InstallmentRequester")
+  vendorPayments        VendorPayment[]        @relation("VendorPaymentRecorder")
+  subContractorPayments SubContractorPayment[] @relation("SubContractorPaymentRecorder")
 
   @@map("users")
 }
@@ -199,19 +199,19 @@ model Project {
   updatedAt      DateTime      @updatedAt @map("updated_at")
 
   // Relations
-  manager          User               @relation("ProjectManager", fields: [managerId], references: [id])
-  client           User?              @relation("ProjectClient", fields: [clientId], references: [id])
-  tasks            Task[]
-  attendance       Attendance[]
-  labourAttendance LabourAttendance[]
-  labourers        Labourer[]
-  purchaseOrders   PurchaseOrder[]
-  photos           Photo[]
-  
-  
+  manager                 User                      @relation("ProjectManager", fields: [managerId], references: [id])
+  client                  User?                     @relation("ProjectClient", fields: [clientId], references: [id])
+  tasks                   Task[]
+  attendance              Attendance[]
+  subContractorAttendance SubContractorAttendance[]
+  subContractors          SubContractor[]
+  purchaseOrders          PurchaseOrder[]
+  photos                  Photo[]
+
   foremanId       String?
-  foreman         User?           @relation("ForemanProjects", fields: [foremanId], references: [id])
+  foreman         User?            @relation("ForemanProjects", fields: [foremanId], references: [id])
   labourEntries   LabourEntry[]
+  labourMaster    LabourMaster[]
   issues          Issue[]
   suggestions     Suggestion[]
   paymentSchedule PaymentSchedule?
@@ -258,11 +258,11 @@ model Task {
   subtasks     Task[]       @relation("SubTasks")
 
   // Relations
-  project    Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  assignedTo User?         @relation("TaskAssignee", fields: [assignedToId], references: [id])
-  createdBy  User          @relation("TaskCreator", fields: [createdById], references: [id])
-  category   TaskCategory? @relation(fields: [categoryId], references: [id])
-  photos     Photo[]
+  project             Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignedTo          User?                @relation("TaskAssignee", fields: [assignedToId], references: [id])
+  createdBy           User                 @relation("TaskCreator", fields: [createdById], references: [id])
+  category            TaskCategory?        @relation(fields: [categoryId], references: [id])
+  photos              Photo[]
   paymentInstallments PaymentInstallment[]
 
   @@map("tasks")
@@ -292,67 +292,67 @@ model Attendance {
   @@map("attendance")
 }
 
-// ─── LABOURERS ──────────────────────────────────────────────────────
-model Labourer {
+// ─── SUB-CONTRACTORS ──────────────────────────────────────────────────
+model SubContractor {
   id             String   @id @default(uuid())
   name           String
   phone          String?
   aadhaar        String?
   tradeType      String   @map("trade_type")
-  proposedAmount Decimal  @db.Decimal(10, 2) @map("proposed_amount")
-  amountPaid     Decimal  @default(0) @db.Decimal(10, 2) @map("amount_paid")
+  proposedAmount Decimal  @map("proposed_amount") @db.Decimal(10, 2)
+  amountPaid     Decimal  @default(0) @map("amount_paid") @db.Decimal(10, 2)
   projectId      String   @map("project_id")
   isActive       Boolean  @default(true) @map("is_active")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
   // Relations
-  project    Project            @relation(fields: [projectId], references: [id])
-  attendance LabourAttendance[]
-  payments   LabourPayment[]
+  project    Project                   @relation(fields: [projectId], references: [id])
+  attendance SubContractorAttendance[]
+  payments   SubContractorPayment[]
 
-  @@map("labourers")
+  @@map("sub_contractors")
 }
 
-model LabourAttendance {
-  id         String           @id @default(uuid())
-  labourerId String           @map("labourer_id")
-  projectId  String           @map("project_id")
-  markedById String           @map("marked_by_id")
-  date       DateTime         @db.Date
-  status     AttendanceStatus @default(PRESENT)
-  photoUrl   String?          @map("photo_url")
-  createdAt  DateTime         @default(now()) @map("created_at")
+model SubContractorAttendance {
+  id              String           @id @default(uuid())
+  subContractorId String           @map("sub_contractor_id")
+  projectId       String           @map("project_id")
+  markedById      String           @map("marked_by_id")
+  date            DateTime         @db.Date
+  status          AttendanceStatus @default(PRESENT)
+  photoUrl        String?          @map("photo_url")
+  createdAt       DateTime         @default(now()) @map("created_at")
 
   // Relations
-  labourer Labourer @relation(fields: [labourerId], references: [id])
-  project  Project  @relation(fields: [projectId], references: [id])
-  markedBy User     @relation("MarkedBy", fields: [markedById], references: [id])
+  subContractor SubContractor @relation(fields: [subContractorId], references: [id])
+  project       Project       @relation(fields: [projectId], references: [id])
+  markedBy      User          @relation("MarkedBy", fields: [markedById], references: [id])
 
-  @@unique([labourerId, date])
-  @@map("labour_attendance")
+  @@unique([subContractorId, date])
+  @@map("sub_contractor_attendance")
 }
 
 // ─── VENDORS ────────────────────────────────────────────────────────
 model Vendor {
-  id           String   @id @default(uuid())
-  name         String
-  phone        String?
-  email        String?
-  address      String?
-  gstNumber    String?  @map("gst_number")
-  categories   String[]
-  rating       Float?   @default(0)
-  paymentTerms String?  @map("payment_terms")
-  credit       Decimal  @default(0) @db.Decimal(12, 2)
-  paid         Decimal  @default(0) @db.Decimal(12, 2)
-  bankName          String? @map("bank_name")
-  accountNumber     String? @map("account_number")
-  ifscCode          String? @map("ifsc_code")
-  accountHolderName String? @map("account_holder_name")
-  isActive     Boolean  @default(true) @map("is_active")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  id                String   @id @default(uuid())
+  name              String
+  phone             String?
+  email             String?
+  address           String?
+  gstNumber         String?  @map("gst_number")
+  categories        String[]
+  rating            Float?   @default(0)
+  paymentTerms      String?  @map("payment_terms")
+  credit            Decimal  @default(0) @db.Decimal(12, 2)
+  paid              Decimal  @default(0) @db.Decimal(12, 2)
+  bankName          String?  @map("bank_name")
+  accountNumber     String?  @map("account_number")
+  ifscCode          String?  @map("ifsc_code")
+  accountHolderName String?  @map("account_holder_name")
+  isActive          Boolean  @default(true) @map("is_active")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
 
   // Relations
   purchaseOrders PurchaseOrder[]
@@ -363,28 +363,28 @@ model Vendor {
 
 // ─── PURCHASE ORDERS ────────────────────────────────────────────────
 model PurchaseOrder {
-  id              String    @id @default(uuid())
-  poNumber        String    @unique @map("po_number")
-  projectId       String    @map("project_id")
-  createdById     String    @map("created_by_id")
-  status          POStatus  @default(DRAFT)
-  urgency         POUrgency @default(NORMAL)
-  vendorId        String?   @map("vendor_id")
-  totalAmount     Decimal?  @db.Decimal(12, 2) @map("total_amount")
-  approvedById    String?   @map("approved_by_id")
-  approvedAt      DateTime? @map("approved_at")
-  notes              String?
-  rejectionReason    String?   @map("rejection_reason")
-  transferredFromId  String?   @map("transferred_from_id")
-  createdAt          DateTime  @default(now()) @map("created_at")
-  updatedAt          DateTime  @updatedAt @map("updated_at")
+  id                String    @id @default(uuid())
+  poNumber          String    @unique @map("po_number")
+  projectId         String    @map("project_id")
+  createdById       String    @map("created_by_id")
+  status            POStatus  @default(DRAFT)
+  urgency           POUrgency @default(NORMAL)
+  vendorId          String?   @map("vendor_id")
+  totalAmount       Decimal?  @map("total_amount") @db.Decimal(12, 2)
+  approvedById      String?   @map("approved_by_id")
+  approvedAt        DateTime? @map("approved_at")
+  notes             String?
+  rejectionReason   String?   @map("rejection_reason")
+  transferredFromId String?   @map("transferred_from_id")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
 
   // Relations
-  project         Project        @relation(fields: [projectId], references: [id])
-  createdBy       User           @relation("POCreator", fields: [createdById], references: [id])
-  vendor          Vendor?        @relation(fields: [vendorId], references: [id])
-  approvedBy      User?          @relation("POApprover", fields: [approvedById], references: [id])
-  transferredFrom PurchaseOrder? @relation("POTransfer", fields: [transferredFromId], references: [id])
+  project         Project         @relation(fields: [projectId], references: [id])
+  createdBy       User            @relation("POCreator", fields: [createdById], references: [id])
+  vendor          Vendor?         @relation(fields: [vendorId], references: [id])
+  approvedBy      User?           @relation("POApprover", fields: [approvedById], references: [id])
+  transferredFrom PurchaseOrder?  @relation("POTransfer", fields: [transferredFromId], references: [id])
   transferredTo   PurchaseOrder[] @relation("POTransfer")
   items           POItem[]
   delivery        Delivery?
@@ -400,8 +400,8 @@ model POItem {
   itemCategory    String   @map("item_category")
   quantity        Float
   unit            String
-  unitPrice       Decimal? @db.Decimal(10, 2) @map("unit_price")
-  totalPrice      Decimal? @db.Decimal(10, 2) @map("total_price")
+  unitPrice       Decimal? @map("unit_price") @db.Decimal(10, 2)
+  totalPrice      Decimal? @map("total_price") @db.Decimal(10, 2)
   brand           String?
   notes           String?
   transferredQty  Float    @default(0) @map("transferred_qty")
@@ -419,7 +419,7 @@ model MaterialCatalog {
   name         String
   category     String
   unit         String
-  defaultPrice Decimal? @db.Decimal(10, 2) @map("default_price")
+  defaultPrice Decimal? @map("default_price") @db.Decimal(10, 2)
   brands       String[]
   isActive     Boolean  @default(true) @map("is_active")
   createdAt    DateTime @default(now()) @map("created_at")
@@ -502,25 +502,72 @@ model Notification {
   @@map("notifications")
 }
 
-
+// ─── DAILY SITE LABOUR (foreman-logged, roster-based) ───────────────
+// LabourEntry = one header per site per date. Individual workers for that
+// day are recorded via LabourAttendanceEntry, each pointing at a roster
+// entry in LabourMaster. labourCount/totalCost are denormalized sums kept
+// in sync on write so existing summary queries stay cheap.
 model LabourEntry {
   id             String   @id @default(cuid())
   projectId      String
   createdById    String
-  labourCount    Int
-  pricePerLabour Float
-  totalCost      Float
+  labourCount    Int      @default(0)
+  totalCost      Float    @default(0)
+  pricePerLabour Float? // legacy flat-rate entries predating the worker roster; new entries leave this null
   date           DateTime
   notes          String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  createdBy      User     @relation("LabourCreatedBy", fields: [createdById], references: [id])
+  project   Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy User                    @relation("LabourCreatedBy", fields: [createdById], references: [id])
+  workers   LabourAttendanceEntry[]
 
   @@index([projectId])
   @@index([createdById])
   @@index([date])
+  @@map("labour_entries")
+}
+
+// Roster of known daily-wage labourers per site, maintained by the foreman.
+// Added once, then reused via tick-mark on each day's LabourEntry.
+model LabourMaster {
+  id            String   @id @default(cuid())
+  projectId     String
+  name          String
+  phone         String?
+  tradeType     String
+  defaultWage   Float
+  aadhaarNumber String?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  project Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  entries LabourAttendanceEntry[]
+
+  @@index([projectId])
+  @@map("labour_master")
+}
+
+// Join of a LabourEntry (day) to a LabourMaster (worker) — one row per
+// worker marked present/half-day on a given day, with that day's wage.
+model LabourAttendanceEntry {
+  id             String           @id @default(cuid())
+  labourEntryId  String
+  labourMasterId String
+  wageAmount     Float
+  status         AttendanceStatus @default(PRESENT)
+  totalCost      Float
+  createdAt      DateTime         @default(now())
+
+  labourEntry  LabourEntry  @relation(fields: [labourEntryId], references: [id], onDelete: Cascade)
+  labourMaster LabourMaster @relation(fields: [labourMasterId], references: [id])
+
+  @@unique([labourEntryId, labourMasterId])
+  @@index([labourEntryId])
+  @@index([labourMasterId])
+  @@map("labour_attendance_entries")
 }
 
 // ─── CLIENT ISSUES ──────────────────────────────────────────────────
@@ -562,7 +609,7 @@ model Suggestion {
 model PaymentSchedule {
   id          String   @id @default(uuid())
   projectId   String   @unique @map("project_id")
-  totalAmount Decimal  @db.Decimal(14, 2) @map("total_amount")
+  totalAmount Decimal  @map("total_amount") @db.Decimal(14, 2)
   notes       String?
   createdById String   @map("created_by_id")
   createdAt   DateTime @default(now()) @map("created_at")
@@ -576,25 +623,25 @@ model PaymentSchedule {
 }
 
 model PaymentInstallment {
-  id             String            @id @default(uuid())
-  scheduleId     String            @map("schedule_id")
-  taskId         String?           @map("task_id")
-  installmentNo  Int               @map("installment_no")
-  title          String?
-  amount         Decimal           @db.Decimal(14, 2)
-  dueDate        DateTime?         @map("due_date")
-  status         InstallmentStatus @default(PENDING)
-  paidAmount     Decimal           @default(0) @db.Decimal(14, 2) @map("paid_amount")
-  notes          String?
-  requestedById  String?           @map("requested_by_id")
-  requestedAt    DateTime?         @map("requested_at")
-  createdAt      DateTime          @default(now()) @map("created_at")
-  updatedAt      DateTime          @updatedAt @map("updated_at")
+  id            String            @id @default(uuid())
+  scheduleId    String            @map("schedule_id")
+  taskId        String?           @map("task_id")
+  installmentNo Int               @map("installment_no")
+  title         String?
+  amount        Decimal           @db.Decimal(14, 2)
+  dueDate       DateTime?         @map("due_date")
+  status        InstallmentStatus @default(PENDING)
+  paidAmount    Decimal           @default(0) @map("paid_amount") @db.Decimal(14, 2)
+  notes         String?
+  requestedById String?           @map("requested_by_id")
+  requestedAt   DateTime?         @map("requested_at")
+  createdAt     DateTime          @default(now()) @map("created_at")
+  updatedAt     DateTime          @updatedAt @map("updated_at")
 
-  schedule   PaymentSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
-  task       Task?           @relation(fields: [taskId], references: [id])
-  requestedBy User?          @relation("InstallmentRequester", fields: [requestedById], references: [id])
-  payments   PaymentRecord[]
+  schedule    PaymentSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  task        Task?           @relation(fields: [taskId], references: [id])
+  requestedBy User?           @relation("InstallmentRequester", fields: [requestedById], references: [id])
+  payments    PaymentRecord[]
 
   @@map("payment_installments")
 }
@@ -618,27 +665,9 @@ model PaymentRecord {
 
 // Tracks each payment sent to a vendor against advance/credit material purchases.
 model VendorPayment {
-  id              String      @id @default(uuid())
-  vendorId        String      @map("vendor_id")
-  amount          Decimal     @db.Decimal(12, 2)
-  paymentDate     DateTime    @default(now()) @map("payment_date")
-  paymentMode     PaymentMode @default(BANK_TRANSFER) @map("payment_mode")
-  receiptNumber   String?     @map("receipt_number")
-  notes           String?
-  recordedById    String      @map("recorded_by_id")
-  createdAt       DateTime    @default(now()) @map("created_at")
-
-  vendor     Vendor @relation(fields: [vendorId], references: [id], onDelete: Cascade)
-  recordedBy User   @relation("VendorPaymentRecorder", fields: [recordedById], references: [id])
-
-  @@map("vendor_payments")
-}
-
-// Tracks each individual payment made to a labourer against their proposed wage.
-model LabourPayment {
   id            String      @id @default(uuid())
-  labourerId    String      @map("labourer_id")
-  amount        Decimal     @db.Decimal(10, 2)
+  vendorId      String      @map("vendor_id")
+  amount        Decimal     @db.Decimal(12, 2)
   paymentDate   DateTime    @default(now()) @map("payment_date")
   paymentMode   PaymentMode @default(BANK_TRANSFER) @map("payment_mode")
   receiptNumber String?     @map("receipt_number")
@@ -646,8 +675,26 @@ model LabourPayment {
   recordedById  String      @map("recorded_by_id")
   createdAt     DateTime    @default(now()) @map("created_at")
 
-  labourer   Labourer @relation(fields: [labourerId], references: [id], onDelete: Cascade)
-  recordedBy User     @relation("LabourPaymentRecorder", fields: [recordedById], references: [id])
+  vendor     Vendor @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  recordedBy User   @relation("VendorPaymentRecorder", fields: [recordedById], references: [id])
 
-  @@map("labour_payments")
+  @@map("vendor_payments")
+}
+
+// Tracks each individual payment made to a sub-contractor against their proposed wage.
+model SubContractorPayment {
+  id              String      @id @default(uuid())
+  subContractorId String      @map("sub_contractor_id")
+  amount          Decimal     @db.Decimal(10, 2)
+  paymentDate     DateTime    @default(now()) @map("payment_date")
+  paymentMode     PaymentMode @default(BANK_TRANSFER) @map("payment_mode")
+  receiptNumber   String?     @map("receipt_number")
+  notes           String?
+  recordedById    String      @map("recorded_by_id")
+  createdAt       DateTime    @default(now()) @map("created_at")
+
+  subContractor SubContractor @relation(fields: [subContractorId], references: [id], onDelete: Cascade)
+  recordedBy    User          @relation("SubContractorPaymentRecorder", fields: [recordedById], references: [id])
+
+  @@map("sub_contractor_payments")
 }

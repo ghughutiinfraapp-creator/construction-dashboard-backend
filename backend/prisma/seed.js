@@ -7,14 +7,14 @@ async function main() {
 
   // Clean existing data
   await prisma.notification.deleteMany();
-  await prisma.labourAttendance.deleteMany();
+  await prisma.subContractorAttendance.deleteMany();
   await prisma.attendance.deleteMany();
   await prisma.delivery.deleteMany();
   await prisma.pOItem.deleteMany();
   await prisma.purchaseOrder.deleteMany();
   await prisma.photo.deleteMany();
   await prisma.task.deleteMany();
-  await prisma.labourer.deleteMany();
+  await prisma.subContractor.deleteMany();
   await prisma.vendor.deleteMany();
   await prisma.project.deleteMany();
   await prisma.refreshToken.deleteMany();
@@ -85,18 +85,18 @@ async function main() {
 
   console.log('✅ Tasks created');
 
-  // ─── LABOURERS ──────────────────────────────────────────────────
-  const labourers = await Promise.all([
-    prisma.labourer.create({ data: { name: 'Ram Prasad', phone: '9888800001', tradeType: 'Mason', proposedAmount: 24000, amountPaid: 16000, projectId: project1.id } }),
-    prisma.labourer.create({ data: { name: 'Shyam Kumar', phone: '9888800002', tradeType: 'Helper', proposedAmount: 15000, amountPaid: 10000, projectId: project1.id } }),
-    prisma.labourer.create({ data: { name: 'Mohan Lal', phone: '9888800003', tradeType: 'Electrician', proposedAmount: 27000, amountPaid: 18000, projectId: project1.id } }),
-    prisma.labourer.create({ data: { name: 'Gopal Das', phone: '9888800004', tradeType: 'Plumber', proposedAmount: 25500, amountPaid: 17000, projectId: project1.id } }),
-    prisma.labourer.create({ data: { name: 'Dinesh Yadav', phone: '9888800005', tradeType: 'Mason', proposedAmount: 24000, amountPaid: 16000, projectId: project1.id } }),
-    prisma.labourer.create({ data: { name: 'Sunil Chauhan', phone: '9888800006', tradeType: 'Helper', proposedAmount: 15000, amountPaid: 9000, projectId: project2.id } }),
-    prisma.labourer.create({ data: { name: 'Anil Gupta', phone: '9888800007', tradeType: 'Carpenter', proposedAmount: 27000, amountPaid: 15000, projectId: project2.id } }),
+  // ─── SUB-CONTRACTORS ──────────────────────────────────────────────
+  const subContractors = await Promise.all([
+    prisma.subContractor.create({ data: { name: 'Ram Prasad', phone: '9888800001', tradeType: 'Mason', proposedAmount: 24000, amountPaid: 16000, projectId: project1.id } }),
+    prisma.subContractor.create({ data: { name: 'Shyam Kumar', phone: '9888800002', tradeType: 'Helper', proposedAmount: 15000, amountPaid: 10000, projectId: project1.id } }),
+    prisma.subContractor.create({ data: { name: 'Mohan Lal', phone: '9888800003', tradeType: 'Electrician', proposedAmount: 27000, amountPaid: 18000, projectId: project1.id } }),
+    prisma.subContractor.create({ data: { name: 'Gopal Das', phone: '9888800004', tradeType: 'Plumber', proposedAmount: 25500, amountPaid: 17000, projectId: project1.id } }),
+    prisma.subContractor.create({ data: { name: 'Dinesh Yadav', phone: '9888800005', tradeType: 'Mason', proposedAmount: 24000, amountPaid: 16000, projectId: project1.id } }),
+    prisma.subContractor.create({ data: { name: 'Sunil Chauhan', phone: '9888800006', tradeType: 'Helper', proposedAmount: 15000, amountPaid: 9000, projectId: project2.id } }),
+    prisma.subContractor.create({ data: { name: 'Anil Gupta', phone: '9888800007', tradeType: 'Carpenter', proposedAmount: 27000, amountPaid: 15000, projectId: project2.id } }),
   ]);
 
-  console.log('✅ Labourers created');
+  console.log('✅ Sub-contractors created');
 
   // ─── VENDORS ────────────────────────────────────────────────────
   const vendor1 = await prisma.vendor.create({

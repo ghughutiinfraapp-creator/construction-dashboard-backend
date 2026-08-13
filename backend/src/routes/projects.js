@@ -84,7 +84,7 @@ router.get('/:id', authenticate, async (req, res, next) => {
         manager: { select: { id: true, name: true, email: true, avatar: true } },
         client: { select: { id: true, name: true, email: true } },
         foreman: { select: { id: true, name: true, email: true, avatar: true } },
-        _count: { select: { tasks: true, purchaseOrders: true, labourers: true, attendance: true } }
+        _count: { select: { tasks: true, purchaseOrders: true, subContractors: true, attendance: true } }
       }
     });
     if (!project) return res.status(404).json({ error: 'Project not found' });

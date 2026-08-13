@@ -10,7 +10,7 @@ router.get('/stats', authenticate, async (req, res, next) => {
     const [
       totalProjects, activeProjects, totalEngineers,
       todayAttendance, pendingPOs, totalPOs,
-      totalLabourers, activeTasks, overdueTasks
+      totalSubContractors, activeTasks, overdueTasks
     ] = await Promise.all([
       prisma.project.count(),
       prisma.project.count({ where: { status: 'ACTIVE' } }),
@@ -18,7 +18,7 @@ router.get('/stats', authenticate, async (req, res, next) => {
       prisma.attendance.count({ where: { date: today } }),
       prisma.purchaseOrder.count({ where: { status: { in: ['SUBMITTED', 'UNDER_REVIEW', 'APPROVED'] } } }),
       prisma.purchaseOrder.count(),
-      prisma.labourer.count({ where: { isActive: true } }),
+      prisma.subContractor.count({ where: { isActive: true } }),
       prisma.task.count({ where: { status: { in: ['NOT_STARTED', 'IN_PROGRESS'] } } }),
       prisma.task.count({ where: { status: { in: ['NOT_STARTED', 'IN_PROGRESS'] }, dueDate: { lt: new Date() } } })
     ]);
@@ -36,7 +36,7 @@ router.get('/stats', authenticate, async (req, res, next) => {
     res.json({
       totalProjects, activeProjects, totalEngineers,
       todayAttendance, pendingPOs, totalPOs,
-      totalLabourers, activeTasks, overdueTasks,
+      totalSubContractors, activeTasks, overdueTasks,
       totalSpend: poSpend._sum.totalAmount || 0,
       totalEstimatedBudget: budgetAgg._sum.budget || 0
     });
@@ -115,22 +115,30 @@ router.get('/project-summary/:id', authenticate, async (req, res, next) => {
   try {
     const projectId = req.params.id;
 
-    const [project, taskStats, labourAmountPaid, poStats] = await Promise.all([
+    const [project, taskStats, subContractorAmountPaid, poStats, labourAgg] = await Promise.all([
       prisma.project.findUnique({
         where: { id: projectId },
         include: { manager: { select: { name: true } }, client: { select: { name: true } } }
       }),
       prisma.task.groupBy({ by: ['status'], where: { projectId }, _count: { id: true } }),
-      prisma.labourer.aggregate({ where: { projectId }, _sum: { amountPaid: true } }),
+      prisma.subContractor.aggregate({ where: { projectId }, _sum: { amountPaid: true } }),
       prisma.purchaseOrder.aggregate({
         where: { projectId, status: { in: ['READY_FOR_PICKUP', 'VERIFIED', 'CLOSED'] } },
         _sum: { totalAmount: true }, _count: { id: true }
-      })
+      }),
+      prisma.labourEntry.aggregate({ where: { projectId }, _sum: { totalCost: true } })
     ]);
 
+    const totalSubContractorCost = Number(subContractorAmountPaid._sum.amountPaid || 0);
+    const totalPOSpend = Number(poStats._sum.totalAmount || 0);
+    const totalDailyLabourCost = labourAgg._sum.totalCost || 0;
+
     res.json({
-      project, taskStats, totalLabourAmountPaid: labourAmountPaid._sum.amountPaid || 0,
-      totalPOSpend: poStats._sum.totalAmount || 0, completedPOs: poStats._count.id
+      project, taskStats,
+      totalSubContractorCost,
+      totalPOSpend, completedPOs: poStats._count.id,
+      totalDailyLabourCost,
+      totalSiteCost: totalPOSpend + totalSubContractorCost + totalDailyLabourCost
     });
   } catch (error) { next(error); }
 });

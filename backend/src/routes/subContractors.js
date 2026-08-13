@@ -2,8 +2,8 @@ const router = require('express').Router();
 const prisma = require('../config/database');
 const { authenticate, authorize } = require('../middleware/auth');
 
-// GET /api/labour/labourers
-router.get('/labourers', authenticate, async (req, res, next) => {
+// GET /api/sub-contractors
+router.get('/', authenticate, async (req, res, next) => {
   try {
     const { projectId, tradeType, search } = req.query;
     const where = { isActive: true };
@@ -11,16 +11,16 @@ router.get('/labourers', authenticate, async (req, res, next) => {
     if (tradeType) where.tradeType = tradeType;
     if (search) where.name = { contains: search, mode: 'insensitive' };
 
-    const labourers = await prisma.labourer.findMany({
+    const subContractors = await prisma.subContractor.findMany({
       where, include: { project: { select: { id: true, name: true } } },
       orderBy: { name: 'asc' }
     });
-    res.json({ labourers });
+    res.json({ subContractors });
   } catch (error) { next(error); }
 });
 
-// POST /api/labour/labourers
-router.post('/labourers', authenticate, authorize('SITE_ENGINEER', 'PROJECT_MANAGER', 'SUPER_ADMIN','FOREMAN'), async (req, res, next) => {
+// POST /api/sub-contractors
+router.post('/', authenticate, authorize('SITE_ENGINEER', 'PROJECT_MANAGER', 'SUPER_ADMIN','FOREMAN'), async (req, res, next) => {
   try {
     const { name, phone, aadhaar, tradeType, proposedAmount, amountPaid, projectId } = req.body;
     if (!name || !tradeType || !projectId) return res.status(400).json({ error: 'name, tradeType and projectId are required' });
@@ -31,31 +31,31 @@ router.post('/labourers', authenticate, authorize('SITE_ENGINEER', 'PROJECT_MANA
     const parsedAmountPaid = amountPaid !== undefined ? parseFloat(amountPaid) : 0;
     if (isNaN(parsedAmountPaid)) return res.status(400).json({ error: 'amountPaid must be a valid number' });
 
-    const labourer = await prisma.labourer.create({
+    const subContractor = await prisma.subContractor.create({
       data: {
         name, phone, aadhaar, tradeType, projectId,
         proposedAmount: parsedProposedAmount,
         amountPaid: parsedAmountPaid
       }
     });
-    res.status(201).json({ labourer });
+    res.status(201).json({ subContractor });
   } catch (error) { next(error); }
 });
 
-// POST /api/labour/attendance/mark
+// POST /api/sub-contractors/attendance/mark
 router.post('/attendance/mark', authenticate, authorize('SITE_ENGINEER'), async (req, res, next) => {
   try {
     const { projectId, date, records } = req.body;
-    // records: [{ labourerId, status, photoUrl }]
+    // records: [{ subContractorId, status, photoUrl }]
     const attendanceDate = new Date(date); attendanceDate.setHours(0, 0, 0, 0);
 
     const results = await Promise.all(
       records.map(async (record) => {
-        return prisma.labourAttendance.upsert({
-          where: { labourerId_date: { labourerId: record.labourerId, date: attendanceDate } },
+        return prisma.subContractorAttendance.upsert({
+          where: { subContractorId_date: { subContractorId: record.subContractorId, date: attendanceDate } },
           update: { status: record.status, photoUrl: record.photoUrl },
           create: {
-            labourerId: record.labourerId, projectId,
+            subContractorId: record.subContractorId, projectId,
             markedById: req.user.id, date: attendanceDate,
             status: record.status, photoUrl: record.photoUrl
           }
@@ -63,11 +63,11 @@ router.post('/attendance/mark', authenticate, authorize('SITE_ENGINEER'), async 
       })
     );
 
-    res.json({ message: `Marked attendance for ${results.length} labourers`, records: results });
+    res.json({ message: `Marked attendance for ${results.length} sub-contractors`, records: results });
   } catch (error) { next(error); }
 });
 
-// GET /api/labour/attendance
+// GET /api/sub-contractors/attendance
 router.get('/attendance', authenticate, async (req, res, next) => {
   try {
     const { projectId, date, startDate, endDate } = req.query;
@@ -76,10 +76,10 @@ router.get('/attendance', authenticate, async (req, res, next) => {
     if (date) { const d = new Date(date); d.setHours(0,0,0,0); where.date = d; }
     if (startDate && endDate) where.date = { gte: new Date(startDate), lte: new Date(endDate) };
 
-    const records = await prisma.labourAttendance.findMany({
+    const records = await prisma.subContractorAttendance.findMany({
       where,
       include: {
-        labourer: { select: { id: true, name: true, tradeType: true, proposedAmount: true, amountPaid: true } },
+        subContractor: { select: { id: true, name: true, tradeType: true, proposedAmount: true, amountPaid: true } },
         markedBy: { select: { id: true, name: true } }
       },
       orderBy: { date: 'desc' }
@@ -88,95 +88,45 @@ router.get('/attendance', authenticate, async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-// GET /api/labour/wage-report
+// GET /api/sub-contractors/wage-report
 router.get('/wage-report', authenticate, async (req, res, next) => {
   try {
     const { projectId, startDate, endDate } = req.query;
     const where = {};
     if (projectId) {
       where.projectId = projectId;
-      where.labourer = { projectId };
+      where.subContractor = { projectId };
     }
     if (startDate && endDate) where.date = { gte: new Date(startDate), lte: new Date(endDate) };
 
-    const records = await prisma.labourAttendance.findMany({
+    const records = await prisma.subContractorAttendance.findMany({
       where: { ...where, OR: [{ status: 'PRESENT' }, { status: 'HALF_DAY' }] },
-      include: { labourer: { select: { id: true, name: true, tradeType: true, proposedAmount: true, amountPaid: true } } }
+      include: { subContractor: { select: { id: true, name: true, tradeType: true, proposedAmount: true, amountPaid: true } } }
     });
 
-    // Calculate attendance summary per labourer
+    // Calculate attendance summary per sub-contractor
     const wageMap = {};
     records.forEach(r => {
-      if (!wageMap[r.labourerId]) {
-        const proposedAmount = parseFloat(r.labourer.proposedAmount);
-        const amountPaid = parseFloat(r.labourer.amountPaid);
-        wageMap[r.labourerId] = {
-          ...r.labourer,
+      if (!wageMap[r.subContractorId]) {
+        const proposedAmount = parseFloat(r.subContractor.proposedAmount);
+        const amountPaid = parseFloat(r.subContractor.amountPaid);
+        wageMap[r.subContractorId] = {
+          ...r.subContractor,
           proposedAmount, amountPaid,
           pendingAmount: proposedAmount - amountPaid,
           daysPresent: 0, halfDays: 0
         };
       }
-      if (r.status === 'PRESENT') wageMap[r.labourerId].daysPresent++;
-      if (r.status === 'HALF_DAY') wageMap[r.labourerId].halfDays++;
+      if (r.status === 'PRESENT') wageMap[r.subContractorId].daysPresent++;
+      if (r.status === 'HALF_DAY') wageMap[r.subContractorId].halfDays++;
     });
 
     res.json({ report: Object.values(wageMap) });
   } catch (error) { next(error); }
 });
-router.post('/sites/:id/labour', authenticate, authorize('FOREMAN'), async (req, res, next) => {
-  try {
-    const siteId = req.params.id;
-    const { labourCount, pricePerLabour, date, notes, workerIds } = req.body;
 
-    const count = parseInt(labourCount);
-    if (!Array.isArray(workerIds) || workerIds.length !== count) {
-      return res.status(400).json({
-        message: `Expected ${count} worker id(s) but received ${workerIds?.length ?? 0}.`,
-      });
-    }
-
-    const totalCost = count * parseFloat(pricePerLabour);
-
-    const entry = await prisma.labourEntry.create({
-      data: {
-        projectId: siteId,
-        labourCount: count,
-        pricePerLabour: parseFloat(pricePerLabour),
-        totalCost,
-        date: new Date(date),
-        notes: notes || null,
-        createdById: req.user.id,
-        workers: {
-          create: workerIds.map((labourerId) => ({ labourerId })),
-        },
-      },
-      include: {
-        workers: { include: { labourer: true } },
-        createdBy: { select: { id: true, name: true } },
-        project: { select: { id: true, name: true } },
-      },
-    });
-
-    // Flatten workers -> the shape the frontend LabourEntry.workers expects
-    res.status(201).json({
-      entry: {
-        ...entry,
-        workers: entry.workers.map((w) => ({
-          id: w.labourer.id,
-          name: w.labourer.name,
-          tradeType: w.labourer.tradeType,
-          phone: w.labourer.phone,
-        })),
-      },
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
-// PUT /api/labour/labourers/:id
-router.put('/labourers/:id', authenticate, authorize('SUPER_ADMIN', 'FOREMAN'), async (req, res, next) => {
+// PUT /api/sub-contractors/:id
+router.put('/:id', authenticate, authorize('SUPER_ADMIN', 'FOREMAN'), async (req, res, next) => {
   try {
     const { id } = req.params;
     const { proposedAmount } = req.body;
@@ -188,13 +138,13 @@ router.put('/labourers/:id', authenticate, authorize('SUPER_ADMIN', 'FOREMAN'), 
       data.proposedAmount = p;
     }
 
-    const labourer = await prisma.labourer.update({ where: { id }, data });
-    res.json({ labourer });
+    const subContractor = await prisma.subContractor.update({ where: { id }, data });
+    res.json({ subContractor });
   } catch (error) { next(error); }
 });
 
-// POST /api/labour/labourers/:id/payments
-router.post('/labourers/:id/payments', authenticate, authorize('SUPER_ADMIN', 'FOREMAN'), async (req, res, next) => {
+// POST /api/sub-contractors/:id/payments
+router.post('/:id/payments', authenticate, authorize('SUPER_ADMIN', 'FOREMAN'), async (req, res, next) => {
   try {
     const { id } = req.params;
     const { amount, paymentDate, paymentMode, receiptNumber, notes } = req.body;
@@ -205,9 +155,9 @@ router.post('/labourers/:id/payments', authenticate, authorize('SUPER_ADMIN', 'F
     }
 
     const [payment] = await prisma.$transaction([
-      prisma.labourPayment.create({
+      prisma.subContractorPayment.create({
         data: {
-          labourerId: id,
+          subContractorId: id,
           amount: parsedAmount,
           paymentDate: paymentDate ? new Date(paymentDate) : undefined,
           paymentMode,
@@ -216,7 +166,7 @@ router.post('/labourers/:id/payments', authenticate, authorize('SUPER_ADMIN', 'F
           recordedById: req.user.id
         }
       }),
-      prisma.labourer.update({
+      prisma.subContractor.update({
         where: { id },
         data: { amountPaid: { increment: parsedAmount } }
       })
@@ -226,12 +176,12 @@ router.post('/labourers/:id/payments', authenticate, authorize('SUPER_ADMIN', 'F
   } catch (error) { next(error); }
 });
 
-// GET /api/labour/labourers/:id/payments
-router.get('/labourers/:id/payments', authenticate, async (req, res, next) => {
+// GET /api/sub-contractors/:id/payments
+router.get('/:id/payments', authenticate, async (req, res, next) => {
   try {
     const { id } = req.params;
-    const payments = await prisma.labourPayment.findMany({
-      where: { labourerId: id },
+    const payments = await prisma.subContractorPayment.findMany({
+      where: { subContractorId: id },
       include: { recordedBy: { select: { id: true, name: true } } },
       orderBy: { paymentDate: 'desc' }
     });

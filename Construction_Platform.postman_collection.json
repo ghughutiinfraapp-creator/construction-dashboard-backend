@@ -653,40 +653,40 @@
     },
 
     {
-      "name": "Labour",
+      "name": "Sub-Contractors",
       "item": [
         {
-          "name": "Get Labourers",
+          "name": "Get Sub-Contractors",
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-            "url": { "raw": "{{base_url}}/labour/labourers?projectId={{project_id}}", "host": ["{{base_url}}"], "path": ["labour","labourers"], "query": [{ "key": "projectId", "value": "{{project_id}}" }] }
+            "url": { "raw": "{{base_url}}/sub-contractors?projectId={{project_id}}", "host": ["{{base_url}}"], "path": ["sub-contractors"], "query": [{ "key": "projectId", "value": "{{project_id}}" }] }
           }
         },
         {
-          "name": "Add Labourer",
+          "name": "Add Sub-Contractor",
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
-            "body": { "mode": "raw", "raw": "{\n  \"name\": \"New Labourer\",\n  \"phone\": \"9800000001\",\n  \"tradeType\": \"Mason\",\n  \"dailyWage\": 800,\n  \"projectId\": \"{{project_id}}\"\n}" },
-            "url": { "raw": "{{base_url}}/labour/labourers", "host": ["{{base_url}}"], "path": ["labour","labourers"] }
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"New Sub-Contractor\",\n  \"phone\": \"9800000001\",\n  \"tradeType\": \"Mason\",\n  \"proposedAmount\": 24000,\n  \"projectId\": \"{{project_id}}\"\n}" },
+            "url": { "raw": "{{base_url}}/sub-contractors", "host": ["{{base_url}}"], "path": ["sub-contractors"] }
           }
         },
         {
-          "name": "Mark Labour Attendance",
+          "name": "Mark Sub-Contractor Attendance",
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
-            "body": { "mode": "raw", "raw": "{\n  \"projectId\": \"{{project_id}}\",\n  \"date\": \"2026-05-17\",\n  \"records\": [\n    { \"labourerId\": \"<labourer_id>\", \"status\": \"PRESENT\" }\n  ]\n}" },
-            "url": { "raw": "{{base_url}}/labour/attendance/mark", "host": ["{{base_url}}"], "path": ["labour","attendance","mark"] }
+            "body": { "mode": "raw", "raw": "{\n  \"projectId\": \"{{project_id}}\",\n  \"date\": \"2026-05-17\",\n  \"records\": [\n    { \"subContractorId\": \"<sub_contractor_id>\", \"status\": \"PRESENT\" }\n  ]\n}" },
+            "url": { "raw": "{{base_url}}/sub-contractors/attendance/mark", "host": ["{{base_url}}"], "path": ["sub-contractors","attendance","mark"] }
           }
         },
         {
-          "name": "Get Labour Attendance",
+          "name": "Get Sub-Contractor Attendance",
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-            "url": { "raw": "{{base_url}}/labour/attendance?projectId={{project_id}}", "host": ["{{base_url}}"], "path": ["labour","attendance"], "query": [{ "key": "projectId", "value": "{{project_id}}" }] }
+            "url": { "raw": "{{base_url}}/sub-contractors/attendance?projectId={{project_id}}", "host": ["{{base_url}}"], "path": ["sub-contractors","attendance"], "query": [{ "key": "projectId", "value": "{{project_id}}" }] }
           }
         },
         {
@@ -694,7 +694,7 @@
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-            "url": { "raw": "{{base_url}}/labour/wage-report?projectId={{project_id}}", "host": ["{{base_url}}"], "path": ["labour","wage-report"], "query": [{ "key": "projectId", "value": "{{project_id}}" }] }
+            "url": { "raw": "{{base_url}}/sub-contractors/wage-report?projectId={{project_id}}", "host": ["{{base_url}}"], "path": ["sub-contractors","wage-report"], "query": [{ "key": "projectId", "value": "{{project_id}}" }] }
           }
         }
       ]
@@ -1027,6 +1027,32 @@
           }
         },
         {
+          "name": "Get Site Roster",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/foreman/sites/{{project_id}}/roster", "host": ["{{base_url}}"], "path": ["foreman","sites","{{project_id}}","roster"] }
+          }
+        },
+        {
+          "name": "Add Roster Worker",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Ramesh\",\n  \"phone\": \"9800000001\",\n  \"tradeType\": \"Helper\",\n  \"defaultWage\": 500\n}" },
+            "url": { "raw": "{{base_url}}/foreman/sites/{{project_id}}/roster", "host": ["{{base_url}}"], "path": ["foreman","sites","{{project_id}}","roster"] }
+          }
+        },
+        {
+          "name": "Update Roster Worker",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"defaultWage\": 550\n}" },
+            "url": { "raw": "{{base_url}}/foreman/roster/<worker_id>", "host": ["{{base_url}}"], "path": ["foreman","roster","<worker_id>"] }
+          }
+        },
+        {
           "name": "Get Site Labour",
           "request": {
             "method": "GET",
@@ -1035,21 +1061,20 @@
           }
         },
         {
-          "name": "Add Labour Entry",
+          "name": "Submit Daily Labour Entry",
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
-            "body": { "mode": "raw", "raw": "{\n  \"labourCount\": 10,\n  \"pricePerLabour\": 600,\n  \"totalCost\": 6000,\n  \"date\": \"2026-05-17\",\n  \"notes\": \"Mason + helpers\"\n}" },
+            "body": { "mode": "raw", "raw": "{\n  \"date\": \"2026-05-17\",\n  \"notes\": \"Mason + helpers\",\n  \"workers\": [\n    { \"labourMasterId\": \"<worker_id>\", \"wageAmount\": 600, \"status\": \"PRESENT\" },\n    { \"newWorker\": { \"name\": \"Ramesh\", \"tradeType\": \"Helper\" }, \"wageAmount\": 500, \"status\": \"PRESENT\" }\n  ]\n}" },
             "url": { "raw": "{{base_url}}/foreman/sites/{{project_id}}/labour", "host": ["{{base_url}}"], "path": ["foreman","sites","{{project_id}}","labour"] }
           }
         },
         {
-          "name": "Update Labour Entry",
+          "name": "Remove Worker From Entry",
           "request": {
-            "method": "PUT",
-            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
-            "body": { "mode": "raw", "raw": "{\n  \"labourCount\": 12,\n  \"totalCost\": 7200\n}" },
-            "url": { "raw": "{{base_url}}/foreman/labour/<entry_id>", "host": ["{{base_url}}"], "path": ["foreman","labour","<entry_id>"] }
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/foreman/labour/<entry_id>/workers/<worker_entry_id>", "host": ["{{base_url}}"], "path": ["foreman","labour","<entry_id>","workers","<worker_entry_id>"] }
           }
         },
         {
