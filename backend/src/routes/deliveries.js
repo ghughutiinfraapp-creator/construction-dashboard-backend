@@ -34,6 +34,21 @@ router.get('/', authenticate, async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
+// GET /api/deliveries/meta/delivery-persons
+// Lightweight list of active delivery people, used to populate the
+// "Material Not Required" form's delivery-person picker. Placed under
+// /meta so it doesn't collide with /:id.
+router.get('/meta/delivery-persons', authenticate, authorize('SITE_ENGINEER', 'PROJECT_MANAGER'), async (req, res, next) => {
+  try {
+    const deliveryPersons = await prisma.user.findMany({
+      where: { role: 'DELIVERY_PERSON', isActive: true },
+      select: { id: true, name: true, phone: true },
+      orderBy: { name: 'asc' }
+    });
+    res.json({ deliveryPersons });
+  } catch (error) { next(error); }
+});
+
 // GET /api/deliveries/:id
 router.get('/:id', authenticate, async (req, res, next) => {
   try {
@@ -181,6 +196,57 @@ router.put('/:id/delivered', authenticate, authorize('DELIVERY_PERSON', 'SITE_EN
         ? 'Delivery completed. Engineer notified for verification.'
         : 'Partial delivery recorded. PO stays open for the remaining items.'
     });
+  } catch (error) { next(error); }
+});
+
+// PUT /api/deliveries/:id/items/:itemId/not-required
+// Site engineer/PM reports that a pending PO item is not needed at this
+// site, and picks EXACTLY which delivery person should be told — the
+// notification goes ONLY to that person, regardless of who (if anyone) is
+// actually assigned to this delivery. Pure notification action: nothing
+// is written to the PO/item/delivery, no schema changes required.
+// Body: { deliveryPersonId, photoUrl, note? } — photoUrl comes from the
+// existing /api/uploads/photo route (entityType 'delivery_item', tied to
+// this deliveryId), so it's already saved as a Photo row before this call.
+router.put('/:id/items/:itemId/not-required', authenticate, authorize('SITE_ENGINEER', 'PROJECT_MANAGER'), async (req, res, next) => {
+  try {
+    const { deliveryPersonId, photoUrl, note } = req.body;
+    if (!deliveryPersonId) return res.status(400).json({ error: 'deliveryPersonId is required' });
+    if (!photoUrl) return res.status(400).json({ error: 'photoUrl is required' });
+
+    const [delivery, deliveryPerson] = await Promise.all([
+      prisma.delivery.findUnique({
+        where: { id: req.params.id },
+        include: {
+          purchaseOrder: { include: { items: true, project: { select: { id: true, name: true } } } }
+        }
+      }),
+      prisma.user.findUnique({ where: { id: deliveryPersonId }, select: { id: true, role: true, isActive: true, name: true } })
+    ]);
+    if (!delivery) return res.status(404).json({ error: 'Delivery not found' });
+
+    const item = delivery.purchaseOrder.items.find(i => i.id === req.params.itemId);
+    if (!item) return res.status(404).json({ error: "Item not found on this delivery's PO" });
+    if (item.receivedQty >= item.quantity) {
+      return res.status(400).json({ error: 'This item has already been fully delivered.' });
+    }
+
+    if (!deliveryPerson || deliveryPerson.role !== 'DELIVERY_PERSON') {
+      return res.status(400).json({ error: 'Selected user is not a delivery person' });
+    }
+    if (!deliveryPerson.isActive) {
+      return res.status(400).json({ error: 'Selected delivery person is not active' });
+    }
+
+    const notifier = new NotificationService(req.app.get('io'));
+    await notifier.send({
+      userId: deliveryPerson.id,
+      title: 'Material Not Required',
+      body: `${req.user.name} says "${item.itemName}" is not required at ${delivery.purchaseOrder.project.name} (PO ${delivery.purchaseOrder.poNumber}).${note ? ` Note: ${note}` : ''} Please don't bring it.`,
+      type: 'GENERAL', entityType: 'delivery', entityId: delivery.id
+    });
+
+    res.json({ message: `${deliveryPerson.name} has been notified that this item is not required.` });
   } catch (error) { next(error); }
 });
 
