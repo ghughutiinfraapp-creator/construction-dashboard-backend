@@ -30,14 +30,12 @@ function wageForStatus(wageAmount, status) {
 
 /**
  * GET /api/foreman/sites
- * Returns all sites (projects) assigned to the logged-in foreman.
+ * Returns all sites. Foremen are not assigned to individual sites; any
+ * authenticated foreman can manage labour attendance at any site.
  */
 router.get('/sites', authenticate, authorize('FOREMAN'), async (req, res, next) => {
   try {
     const sites = await prisma.project.findMany({
-      where: {
-        foremanId: req.user.id,
-      },
       select: {
         id: true,
         name: true,
@@ -57,9 +55,9 @@ router.get('/sites', authenticate, authorize('FOREMAN'), async (req, res, next) 
   }
 });
 
-async function assertForemanSite(siteId, foremanId) {
-  return prisma.project.findFirst({
-    where: { id: siteId, foremanId },
+async function findSite(siteId) {
+  return prisma.project.findUnique({
+    where: { id: siteId },
     include: {
       manager: { select: { id: true, name: true } },
       client: { select: { id: true, name: true } },
@@ -76,8 +74,8 @@ router.get('/sites/:siteId/roster', authenticate, authorize('FOREMAN'), async (r
     const { siteId } = req.params;
     const { includeInactive } = req.query;
 
-    const site = await assertForemanSite(siteId, req.user.id);
-    if (!site) return res.status(403).json({ message: 'You are not assigned to this site.' });
+    const site = await findSite(siteId);
+    if (!site) return res.status(404).json({ message: 'Site not found.' });
 
     const roster = await prisma.labourMaster.findMany({
       where: { projectId: siteId, ...(includeInactive ? {} : { isActive: true }) },
@@ -108,8 +106,8 @@ router.post('/sites/:siteId/roster', authenticate, authorize('FOREMAN'), async (
       return res.status(400).json({ message: 'defaultWage must be a valid non-negative number.' });
     }
 
-    const site = await assertForemanSite(siteId, req.user.id);
-    if (!site) return res.status(403).json({ message: 'You are not assigned to this site.' });
+    const site = await findSite(siteId);
+    if (!site) return res.status(404).json({ message: 'Site not found.' });
 
     const worker = await prisma.labourMaster.create({
       data: {
@@ -137,10 +135,8 @@ router.put('/roster/:workerId', authenticate, authorize('FOREMAN'), async (req, 
     const { workerId } = req.params;
     const { name, phone, tradeType, defaultWage, aadhaarNumber, isActive } = req.body;
 
-    const existing = await prisma.labourMaster.findFirst({
-      where: { id: workerId, project: { foremanId: req.user.id } },
-    });
-    if (!existing) return res.status(404).json({ message: 'Worker not found or not on one of your sites.' });
+    const existing = await prisma.labourMaster.findUnique({ where: { id: workerId } });
+    if (!existing) return res.status(404).json({ message: 'Worker not found.' });
 
     const data = {};
     if (name !== undefined) data.name = name;
@@ -171,8 +167,8 @@ router.get('/sites/:siteId/labour', authenticate, authorize('FOREMAN'), async (r
     const { siteId } = req.params;
     const { page = 1, limit = 20, date } = req.query;
 
-    const site = await assertForemanSite(siteId, req.user.id);
-    if (!site) return res.status(403).json({ message: 'You are not assigned to this site.' });
+    const site = await findSite(siteId);
+    if (!site) return res.status(404).json({ message: 'Site not found.' });
 
     const where = { projectId: siteId };
     if (date) {
@@ -245,8 +241,21 @@ router.post('/sites/:siteId/labour', authenticate, authorize('FOREMAN'), async (
       }
     }
 
-    const site = await assertForemanSite(siteId, req.user.id);
-    if (!site) return res.status(403).json({ message: 'You are not assigned to this site.' });
+    const site = await findSite(siteId);
+    if (!site) return res.status(404).json({ message: 'Site not found.' });
+
+    // Do not allow a roster ID from another site to be attached to this
+    // site's attendance entry. This also turns stale/invalid IDs into a
+    // clear validation response instead of a Prisma constraint error.
+    const rosterIds = [...new Set(workers.map((w) => w.labourMasterId).filter(Boolean))];
+    if (rosterIds.length > 0) {
+      const validWorkers = await prisma.labourMaster.count({
+        where: { id: { in: rosterIds }, projectId: siteId },
+      });
+      if (validWorkers !== rosterIds.length) {
+        return res.status(400).json({ message: 'One or more workers do not belong to this site.' });
+      }
+    }
 
     const entryDate = startOfDay(date);
 
