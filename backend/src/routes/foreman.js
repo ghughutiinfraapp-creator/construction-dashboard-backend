@@ -438,4 +438,119 @@ router.get('/sites/:siteId/labour/summary', authenticate, authorize('FOREMAN', '
   }
 });
 
+/**
+ * GET /api/foreman/sites/:siteId/labour/monthly-report?month=YYYY-MM
+ * Returns every roster worker with one status per calendar day and the
+ * wage earned during the month (present = full wage, half-day = half wage).
+ */
+router.get(
+  '/sites/:siteId/labour/monthly-report',
+  authenticate,
+  authorize('FOREMAN', 'PROJECT_MANAGER', 'SUPER_ADMIN', 'SUPER_ADMIN_VIEW', 'FINANCE'),
+  async (req, res, next) => {
+    try {
+      const { siteId } = req.params;
+      const { month } = req.query;
+
+      if (!/^\d{4}-\d{2}$/.test(month || '')) {
+        return res.status(400).json({ message: 'month is required in YYYY-MM format.' });
+      }
+
+      const [year, monthNumber] = month.split('-').map(Number);
+      if (monthNumber < 1 || monthNumber > 12) {
+        return res.status(400).json({ message: 'month must be between 01 and 12.' });
+      }
+
+      const site = await prisma.project.findUnique({
+        where: { id: siteId },
+        select: { id: true, name: true },
+      });
+      if (!site) return res.status(404).json({ message: 'Site not found.' });
+
+      const startDate = new Date(year, monthNumber - 1, 1);
+      const endDate = new Date(year, monthNumber, 1);
+      const today = startOfDay(new Date());
+      const lastCalendarDay = new Date(year, monthNumber, 0);
+      const reportEndDay =
+        year === today.getFullYear() && monthNumber - 1 === today.getMonth()
+          ? today
+          : lastCalendarDay;
+
+      const days = [];
+      if (startDate <= reportEndDay) {
+        for (let day = 1; day <= reportEndDay.getDate(); day += 1) {
+          days.push(`${month}-${String(day).padStart(2, '0')}`);
+        }
+      }
+
+      const workers = await prisma.labourMaster.findMany({
+        where: { projectId: siteId },
+        include: {
+          entries: {
+            where: { labourEntry: { date: { gte: startDate, lt: endDate } } },
+            include: { labourEntry: { select: { date: true } } },
+          },
+        },
+        orderBy: { name: 'asc' },
+      });
+
+      const report = workers.map((worker) => {
+        const attendanceByDate = new Map(
+          worker.entries.map((entry) => {
+            const date = entry.labourEntry.date;
+            const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
+              date.getDate()
+            ).padStart(2, '0')}`;
+            return [key, entry];
+          })
+        );
+
+        let daysPresent = 0;
+        let halfDays = 0;
+        let daysAbsent = 0;
+        let monthlyWage = 0;
+
+        const attendance = days.map((date) => {
+          const entry = attendanceByDate.get(date);
+          const status = entry?.status || 'ABSENT';
+          const dailyWage = entry?.wageAmount ?? worker.defaultWage;
+          const earned = wageForStatus(dailyWage, status);
+
+          if (status === 'PRESENT') daysPresent += 1;
+          else if (status === 'HALF_DAY') halfDays += 1;
+          else daysAbsent += 1;
+          monthlyWage += earned;
+
+          return { date, status, dailyWage, earned };
+        });
+
+        return {
+          id: worker.id,
+          name: worker.name,
+          phone: worker.phone,
+          tradeType: worker.tradeType,
+          defaultWage: worker.defaultWage,
+          isActive: worker.isActive,
+          attendance,
+          daysPresent,
+          halfDays,
+          daysAbsent,
+          monthlyWage,
+        };
+      });
+
+      res.json({
+        site,
+        month,
+        days,
+        report,
+        totalWorkers: report.length,
+        totalMonthlyWage: report.reduce((sum, worker) => sum + worker.monthlyWage, 0),
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
 module.exports = router;
