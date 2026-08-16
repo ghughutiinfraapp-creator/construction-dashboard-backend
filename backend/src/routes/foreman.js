@@ -553,4 +553,27 @@ router.get(
   }
 );
 
+/**
+ * GET /api/foreman/labour/total-cost
+ * Returns aggregated labour cost across ALL sites — used by the dashboard's
+ * Budget Spent card. Mirrors the totalCost logic in the per-site summary
+ * route above, but without a projectId filter.
+ */
+router.get(
+  '/labour/total-cost',
+  authenticate,
+  authorize('SUPER_ADMIN', 'SUPER_ADMIN_VIEW', 'FINANCE'),
+  async (req, res, next) => {
+    try {
+      const result = await prisma.labourEntry.aggregate({
+        _sum: { totalCost: true },
+      });
+
+      res.json({ totalLabourCost: result._sum.totalCost || 0 });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
 module.exports = router;
