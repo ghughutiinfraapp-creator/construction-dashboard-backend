@@ -67,7 +67,14 @@ async function findSite(siteId) {
 
 /**
  * GET /api/foreman/sites/:siteId/roster
- * Returns the site's labour roster (added once, reused daily via tick-mark).
+ * Returns the FULL company-wide worker directory (not just workers
+ * registered at this site), since a worker added anywhere is usable
+ * anywhere. `localWorkerIds` tells the client which of those workers
+ * have actually worked at *this* site before, so the UI can group
+ * "at this site" vs "from other sites".
+ *
+ * `LabourMaster.projectId` is kept only as "site where first registered"
+ * metadata — it is intentionally NOT used to filter this list.
  */
 router.get('/sites/:siteId/roster', authenticate, authorize('FOREMAN'), async (req, res, next) => {
   try {
@@ -77,12 +84,21 @@ router.get('/sites/:siteId/roster', authenticate, authorize('FOREMAN'), async (r
     const site = await findSite(siteId);
     if (!site) return res.status(404).json({ message: 'Site not found.' });
 
-    const roster = await prisma.labourMaster.findMany({
-      where: { projectId: siteId, ...(includeInactive ? {} : { isActive: true }) },
-      orderBy: { name: 'asc' },
-    });
+    const [roster, localAttendance] = await Promise.all([
+      prisma.labourMaster.findMany({
+        where: includeInactive ? {} : { isActive: true },
+        orderBy: { name: 'asc' },
+      }),
+      prisma.labourAttendanceEntry.findMany({
+        where: { labourEntry: { projectId: siteId } },
+        select: { labourMasterId: true },
+        distinct: ['labourMasterId'],
+      }),
+    ]);
 
-    res.json({ roster });
+    const localWorkerIds = localAttendance.map((a) => a.labourMasterId);
+
+    res.json({ roster, localWorkerIds });
   } catch (error) {
     next(error);
   }
@@ -90,7 +106,9 @@ router.get('/sites/:siteId/roster', authenticate, authorize('FOREMAN'), async (r
 
 /**
  * POST /api/foreman/sites/:siteId/roster
- * Adds a new labour to the site's roster (one-time setup per worker).
+ * Adds a new labour to the company-wide directory (one-time setup per
+ * worker, usable at any site thereafter). `siteId` is only recorded as
+ * where the worker was first registered.
  * Body: { name, phone?, tradeType, defaultWage, aadhaarNumber? }
  */
 router.post('/sites/:siteId/roster', authenticate, authorize('FOREMAN'), async (req, res, next) => {
@@ -128,7 +146,9 @@ router.post('/sites/:siteId/roster', authenticate, authorize('FOREMAN'), async (
 
 /**
  * PUT /api/foreman/roster/:workerId
- * Edits a roster entry (e.g. updated wage) or deactivates a worker who left the site.
+ * Edits a worker's directory entry (e.g. updated wage) or deactivates
+ * them. Since the directory is global, this affects the worker
+ * everywhere, not just at one site.
  */
 router.put('/roster/:workerId', authenticate, authorize('FOREMAN'), async (req, res, next) => {
   try {
@@ -215,7 +235,7 @@ router.get('/sites/:siteId/labour', authenticate, authorize('FOREMAN'), async (r
  * Body: {
  *   date, notes?,
  *   workers: [
- *     { labourMasterId, wageAmount, status },                          // existing roster worker
+ *     { labourMasterId, wageAmount, status },                          // any worker in the company directory
  *     { newWorker: { name, tradeType, phone?, aadhaarNumber? }, wageAmount, status }  // add-on-the-fly
  *   ]
  * }
@@ -223,6 +243,10 @@ router.get('/sites/:siteId/labour', authenticate, authorize('FOREMAN'), async (r
  * One LabourEntry per site per date: re-submitting the same date upserts
  * each worker's attendance row rather than creating a duplicate entry, so
  * a foreman can add latecomers later in the day without starting over.
+ *
+ * labourMasterId can belong to ANY site's original registration — the
+ * worker directory is company-wide, so a worker added while working at
+ * Site A can be ticked in at Site B without re-entering their details.
  */
 router.post('/sites/:siteId/labour', authenticate, authorize('FOREMAN'), async (req, res, next) => {
   try {
@@ -244,16 +268,18 @@ router.post('/sites/:siteId/labour', authenticate, authorize('FOREMAN'), async (
     const site = await findSite(siteId);
     if (!site) return res.status(404).json({ message: 'Site not found.' });
 
-    // Do not allow a roster ID from another site to be attached to this
-    // site's attendance entry. This also turns stale/invalid IDs into a
-    // clear validation response instead of a Prisma constraint error.
+    // Confirm every labourMasterId exists in the (company-wide) directory.
+    // This is no longer scoped to this site's projectId — a worker
+    // registered at any site is valid here too. This still turns
+    // stale/invalid IDs into a clear validation response instead of a
+    // Prisma constraint error.
     const rosterIds = [...new Set(workers.map((w) => w.labourMasterId).filter(Boolean))];
     if (rosterIds.length > 0) {
       const validWorkers = await prisma.labourMaster.count({
-        where: { id: { in: rosterIds }, projectId: siteId },
+        where: { id: { in: rosterIds } },
       });
       if (validWorkers !== rosterIds.length) {
-        return res.status(400).json({ message: 'One or more workers do not belong to this site.' });
+        return res.status(400).json({ message: 'One or more selected workers could not be found.' });
       }
     }
 
@@ -483,11 +509,16 @@ router.get(
         }
       }
 
+      // Monthly report stays site-scoped: it should only show workers who
+      // actually had an attendance entry at THIS site during the month,
+      // not the whole company directory (which is now global).
       const workers = await prisma.labourMaster.findMany({
-        where: { projectId: siteId },
+        where: {
+          entries: { some: { labourEntry: { projectId: siteId, date: { gte: startDate, lt: endDate } } } },
+        },
         include: {
           entries: {
-            where: { labourEntry: { date: { gte: startDate, lt: endDate } } },
+            where: { labourEntry: { date: { gte: startDate, lt: endDate }, projectId: siteId } },
             include: { labourEntry: { select: { date: true } } },
           },
         },
