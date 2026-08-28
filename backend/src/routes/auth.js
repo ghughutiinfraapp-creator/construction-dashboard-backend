@@ -110,7 +110,10 @@ router.post('/forgot-password', async (req, res, next) => {
     // Always respond with the same message so we don't leak which emails are registered
     const genericResponse = { message: 'If an account with that email exists, a password reset link has been sent.' };
 
-    if (!user || !user.isActive) return res.json(genericResponse);
+    if (!user || !user.isActive) {
+      console.warn(`Password reset requested for ${email} but no active account matched; no email sent.`);
+      return res.json(genericResponse);
+    }
 
     const token = crypto.randomBytes(32).toString('hex');
     await prisma.passwordResetToken.create({
@@ -118,7 +121,13 @@ router.post('/forgot-password', async (req, res, next) => {
     });
 
     const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${token}`;
-    await sendPasswordResetEmail({ to: user.email, name: user.name, resetUrl });
+    try {
+      await sendPasswordResetEmail({ to: user.email, name: user.name, resetUrl });
+    } catch (mailError) {
+      // Keep the response generic so we don't leak which emails are registered,
+      // but make the failure loud in the logs instead of a silent success.
+      console.error('Failed to send password reset email:', mailError);
+    }
 
     res.json(genericResponse);
   } catch (error) { next(error); }

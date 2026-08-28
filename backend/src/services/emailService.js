@@ -7,9 +7,18 @@ const transporter = nodemailer.createTransport({
   auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
 });
 
+// SMTP_USER is the relay login (Resend uses the literal string "resend"), not a
+// mailbox. The From address has to be a real address on a domain verified with
+// the provider, so it is configured separately.
+const getFromAddress = () => {
+  const from = process.env.EMAIL_FROM;
+  if (!from) throw new Error('EMAIL_FROM is not set; cannot send mail');
+  return from;
+};
+
 const sendPasswordResetEmail = async ({ to, name, resetUrl }) => {
-  await transporter.sendMail({
-    from: process.env.SMTP_USER,
+  const info = await transporter.sendMail({
+    from: getFromAddress(),
     to,
     subject: 'Reset your password',
     html: `
@@ -19,6 +28,8 @@ const sendPasswordResetEmail = async ({ to, name, resetUrl }) => {
       <p>This link expires in 1 hour. If you didn't request this, you can safely ignore this email.</p>
     `
   });
+  console.log(`Password reset email accepted for ${to} (messageId: ${info.messageId})`);
+  return info;
 };
 
 module.exports = { sendPasswordResetEmail };
