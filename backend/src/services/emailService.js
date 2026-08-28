@@ -1,24 +1,37 @@
-const nodemailer = require('nodemailer');
+// Sends through Resend's HTTP API rather than SMTP. Render's free instances
+// block outbound traffic to SMTP ports (25/465/587), so nodemailer connections
+// time out with ETIMEDOUT there; the HTTP API uses 443 and is unaffected.
+const RESEND_ENDPOINT = 'https://api.resend.com/emails';
 
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: parseInt(process.env.SMTP_PORT || '587', 10),
-  secure: parseInt(process.env.SMTP_PORT || '587', 10) === 465,
-  auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
-});
-
-// SMTP_USER is the relay login (Resend uses the literal string "resend"), not a
-// mailbox. The From address has to be a real address on a domain verified with
-// the provider, so it is configured separately.
-const getFromAddress = () => {
+const getConfig = () => {
+  const apiKey = process.env.RESEND_API_KEY || process.env.SMTP_PASS;
   const from = process.env.EMAIL_FROM;
+  if (!apiKey) throw new Error('RESEND_API_KEY is not set; cannot send mail');
   if (!from) throw new Error('EMAIL_FROM is not set; cannot send mail');
-  return from;
+  return { apiKey, from };
+};
+
+const sendEmail = async ({ to, subject, html }) => {
+  const { apiKey, from } = getConfig();
+
+  const response = await fetch(RESEND_ENDPOINT, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ from, to, subject, html })
+  });
+
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(`Resend rejected the message (${response.status}): ${body.message || 'unknown error'}`);
+  }
+  return body;
 };
 
 const sendPasswordResetEmail = async ({ to, name, resetUrl }) => {
-  const info = await transporter.sendMail({
-    from: getFromAddress(),
+  const result = await sendEmail({
     to,
     subject: 'Reset your password',
     html: `
@@ -28,8 +41,8 @@ const sendPasswordResetEmail = async ({ to, name, resetUrl }) => {
       <p>This link expires in 1 hour. If you didn't request this, you can safely ignore this email.</p>
     `
   });
-  console.log(`Password reset email accepted for ${to} (messageId: ${info.messageId})`);
-  return info;
+  console.log(`Password reset email accepted for ${to} (id: ${result.id})`);
+  return result;
 };
 
 module.exports = { sendPasswordResetEmail };
