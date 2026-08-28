@@ -154,6 +154,7 @@ model User {
   photos                Photo[]
   notifications         Notification[]
   refreshTokens         RefreshToken[]
+  passwordResetTokens   PasswordResetToken[]
 
   foremanProjects       Project[]              @relation("ForemanProjects")
   labourEntries         LabourEntry[]          @relation("LabourCreatedBy")
@@ -178,6 +179,19 @@ model RefreshToken {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("refresh_tokens")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  token     String    @unique
+  userId    String    @map("user_id")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("password_reset_tokens")
 }
 
 // ─── PROJECTS ───────────────────────────────────────────────────────

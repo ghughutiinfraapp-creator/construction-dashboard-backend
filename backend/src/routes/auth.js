@@ -1,9 +1,11 @@
 const router = require('express').Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
 const prisma = require('../config/database');
 const { authenticate, authorize } = require('../middleware/auth');
+const { sendPasswordResetEmail } = require('../services/emailService');
 
 // POST /api/auth/register (Admin only)
 router.post('/register', authenticate, authorize('SUPER_ADMIN', 'PROJECT_MANAGER','SITE_ENGINEER', 'DELIVERY_PERSON', 'CLIENT'), async (req, res, next) => {
@@ -95,6 +97,52 @@ router.post('/refresh', async (req, res, next) => {
 
     const accessToken = jwt.sign({ userId: stored.user.id, role: stored.user.role }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || '24h' });
     res.json({ accessToken });
+  } catch (error) { next(error); }
+});
+
+// POST /api/auth/forgot-password
+router.post('/forgot-password', async (req, res, next) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email is required' });
+
+    const user = await prisma.user.findUnique({ where: { email } });
+    // Always respond with the same message so we don't leak which emails are registered
+    const genericResponse = { message: 'If an account with that email exists, a password reset link has been sent.' };
+
+    if (!user || !user.isActive) return res.json(genericResponse);
+
+    const token = crypto.randomBytes(32).toString('hex');
+    await prisma.passwordResetToken.create({
+      data: { token, userId: user.id, expiresAt: new Date(Date.now() + 60 * 60 * 1000) }
+    });
+
+    const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${token}`;
+    await sendPasswordResetEmail({ to: user.email, name: user.name, resetUrl });
+
+    res.json(genericResponse);
+  } catch (error) { next(error); }
+});
+
+// POST /api/auth/reset-password
+router.post('/reset-password', async (req, res, next) => {
+  try {
+    const { token, password } = req.body;
+    if (!token || !password) return res.status(400).json({ error: 'Token and new password are required' });
+
+    const resetToken = await prisma.passwordResetToken.findUnique({ where: { token } });
+    if (!resetToken || resetToken.usedAt || resetToken.expiresAt < new Date()) {
+      return res.status(400).json({ error: 'Invalid or expired reset token' });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 12);
+    await prisma.$transaction([
+      prisma.user.update({ where: { id: resetToken.userId }, data: { password: hashedPassword } }),
+      prisma.passwordResetToken.update({ where: { id: resetToken.id }, data: { usedAt: new Date() } }),
+      prisma.refreshToken.deleteMany({ where: { userId: resetToken.userId } })
+    ]);
+
+    res.json({ message: 'Password reset successfully' });
   } catch (error) { next(error); }
 });
 

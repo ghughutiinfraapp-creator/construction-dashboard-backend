@@ -74,6 +74,25 @@ router.put('/:id', authenticate, authorize('SUPER_ADMIN'), async (req, res, next
   } catch (error) { next(error); }
 });
 
+// DELETE /api/users/:id (SUPER_ADMIN only)
+router.delete('/:id', authenticate, authorize('SUPER_ADMIN'), async (req, res, next) => {
+  try {
+    if (req.params.id === req.user.id) {
+      return res.status(400).json({ error: 'You cannot delete your own account' });
+    }
+
+    const user = await prisma.user.findUnique({ where: { id: req.params.id } });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    await prisma.$transaction([
+      prisma.user.update({ where: { id: req.params.id }, data: { isActive: false } }),
+      prisma.refreshToken.deleteMany({ where: { userId: req.params.id } })
+    ]);
+
+    res.json({ message: 'User deleted successfully' });
+  } catch (error) { next(error); }
+});
+
 // PUT /api/users/:id/reset-password
 router.put('/:id/reset-password', authenticate, authorize('SUPER_ADMIN'), async (req, res, next) => {
   try {
